@@ -1,0 +1,26 @@
+# SPDX-FileCopyrightText: 2025 crux contributors <https://github.com/ash-project/crux/graphs.contributors>
+#
+# SPDX-License-Identifier: MIT
+
+---
+updates:
+  - directory: /
+    groups:
+      dev-dependencies:
+        dependency-type: development
+      production-dependencies:
+        dependency-type: production
+    package-ecosystem: mix
+    schedule:
+      interval: monthly
+    versioning-strategy: lockfile-only
+  - directory: /
+    groups:
+      github-actions:
+        applies-to: version-updates
+        patterns:
+          - '*'
+    package-ecosystem: github-actions
+    schedule:
+      interval: monthly
+version: 2

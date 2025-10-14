@@ -1,0 +1,42 @@
+# SPDX-FileCopyrightText: 2025 crux contributors <https://github.com/ash-project/crux/graphs.contributors>
+#
+# SPDX-License-Identifier: MIT
+
+name: Ash CI
+on:
+  push:
+    tags:
+      - "v*"
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ash-ci:
+    strategy:
+      matrix:
+        sat_solver: ["SimpleSat", "Picosat"]
+    uses: ash-project/ash/.github/workflows/ash-ci.yml@main
+    secrets:
+      HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+      security-events: write
+    with:
+      release: ${{matrix.sat_solver == 'Picosat'}}
+      publish-docs: ${{matrix.sat_solver == 'Picosat'}}
+      spark-formatter: false
+      codegen: false
+      doctor: true
+      conventional-commit: false
+      spark-cheat-sheets: false
+      sobelow: true
+      postgres: false
+      tenants: false
+      sat-solver: ${{ matrix.sat_solver }}
+      reuse: true
+      community-files: true
