@@ -17,7 +17,6 @@ defmodule Crux.MixProject do
     [
       app: :crux,
       version: @version,
-      version: "0.1.0",
       elixir: "~> 1.11",
       start_permanent: Mix.env() == :prod,
       package: package(),
