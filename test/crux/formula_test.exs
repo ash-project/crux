@@ -57,6 +57,10 @@ defmodule Crux.FormulaTest do
       # Simple AND
       result = Formula.from_expression(b(:a and :b))
       assert %Formula{cnf: [[1], [2]], bindings: %{1 => :a, 2 => :b}} = result
+
+      # Booleans
+      assert %Formula{cnf: [], bindings: %{}} = Formula.from_expression(true)
+      assert %Formula{cnf: [[1], [-1]], bindings: %{}} = Formula.from_expression(false)
     end
   end
 
@@ -81,6 +85,11 @@ defmodule Crux.FormulaTest do
 
       result = Formula.to_expression(formula)
       assert result == b(:x or not :y)
+    end
+
+    test "converts back boolean formulas" do
+      assert true |> Formula.from_expression() |> Formula.to_expression() == true
+      assert false |> Formula.from_expression() |> Formula.to_expression() == false
     end
 
     property "roundtrip from_expression to to_expression preserves equivalence" do

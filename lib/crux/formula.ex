@@ -79,6 +79,14 @@ defmodule Crux.Formula do
   @enforce_keys [:cnf, :bindings, :reverse_bindings]
   defstruct [:cnf, :bindings, :reverse_bindings]
 
+  @simple_true %{__struct__: __MODULE__, cnf: [], bindings: %{}, reverse_bindings: %{}}
+  @simple_false %{
+    __struct__: __MODULE__,
+    cnf: [[1], [-1]],
+    bindings: %{1 => false},
+    reverse_bindings: %{false => 1}
+  }
+
   @doc """
   Converts a boolean expression to a SAT formula in Conjunctive Normal Form (CNF).
 
@@ -109,10 +117,10 @@ defmodule Crux.Formula do
     |> Expression.run(& &1)
     |> case do
       true ->
-        %__MODULE__{cnf: [], bindings: %{}, reverse_bindings: %{}}
+        @simple_true
 
       false ->
-        %__MODULE__{cnf: [[1], [-1]], bindings: %{1 => false}, reverse_bindings: %{false => 1}}
+        @simple_false
 
       expression ->
         {bindings, reverse_bindings, expression} =
@@ -121,7 +129,7 @@ defmodule Crux.Formula do
           |> extract_bindings()
 
         %__MODULE__{
-          cnf: lift_clauses(expression),
+          cnf: expression |> lift_clauses() |> Enum.uniq(),
           bindings: bindings,
           reverse_bindings: reverse_bindings
         }
@@ -154,7 +162,8 @@ defmodule Crux.Formula do
   """
   @spec to_expression(formula :: t(variable)) :: Expression.cnf(variable) when variable: term()
   def to_expression(formula)
-  def to_expression(%__MODULE__{cnf: []}), do: true
+  def to_expression(@simple_true), do: true
+  def to_expression(@simple_false), do: false
 
   def to_expression(%__MODULE__{cnf: cnf, bindings: bindings}) do
     cnf
@@ -188,6 +197,14 @@ defmodule Crux.Formula do
 
     "p cnf #{variable_count} #{clause_count}\n" <> formatted_input
   end
+
+  @doc false
+  @spec simple_true() :: t()
+  def simple_true, do: @simple_true
+
+  @doc false
+  @spec simple_false() :: t()
+  def simple_false, do: @simple_false
 
   @spec clause_to_expression(clause(), bindings(variable)) :: Expression.t(variable)
         when variable: term()
