@@ -15,9 +15,6 @@ permissions:
   contents: read
 jobs:
   ash-ci:
-    strategy:
-      matrix:
-        sat_solver: ["SimpleSat", "Picosat"]
     uses: ash-project/ash/.github/workflows/ash-ci.yml@main
     secrets:
       HEX_API_KEY: ${{ secrets.HEX_API_KEY }}
@@ -27,8 +24,8 @@ jobs:
       id-token: write
       security-events: write
     with:
-      release: ${{matrix.sat_solver == 'Picosat'}}
-      publish-docs: ${{matrix.sat_solver == 'Picosat'}}
+      release: true
+      publish-docs: true
       spark-formatter: false
       codegen: false
       doctor: true
@@ -37,6 +34,5 @@ jobs:
       sobelow: true
       postgres: false
       tenants: false
-      sat-solver: ${{ matrix.sat_solver }}
       reuse: true
       community-files: true

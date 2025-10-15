@@ -29,7 +29,10 @@ cond do
 
       @doc false
       def solve_expression(cnf) do
-        Module.concat([System.get_env("SAT_SOLVER") || "Picosat"]).solve(cnf)
+        env_solver = Module.concat([System.get_env("SAT_SOLVER") || "Picosat"])
+        solver = Process.get(__MODULE__, env_solver)
+
+        solver.solve(cnf)
       end
 
       @doc check_doc
