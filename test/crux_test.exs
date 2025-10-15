@@ -17,14 +17,24 @@ defmodule CruxTest do
     test "finds a satisfying assignment for a satisfiable formula" do
       formula = Formula.from_expression(b(:a or :b))
 
-      assert {:ok, %{a: a, b: b}} = Crux.solve(formula)
-      assert a or b
+      assert {:ok, result} = Crux.solve(formula)
+
+      assert result in [
+               %{a: true},
+               %{b: true},
+               %{a: true, b: true}
+             ]
     end
 
     test "returns :unsatisfiable for an unsatisfiable formula" do
       formula = Formula.from_expression(b(:a and not :a))
 
       assert {:error, :unsatisfiable} = Crux.solve(formula)
+    end
+
+    test "deals with simple booleans properly" do
+      assert {:ok, %{}} = true |> Formula.from_expression() |> Crux.solve()
+      assert {:error, :unsatisfiable} = false |> Formula.from_expression() |> Crux.solve()
     end
   end
 
@@ -59,6 +69,11 @@ defmodule CruxTest do
       formula = Formula.from_expression(expression)
 
       assert Crux.satisfiable?(formula)
+    end
+
+    test "deals with simple booleans properly" do
+      assert true |> Formula.from_expression() |> Crux.satisfiable?()
+      refute false |> Formula.from_expression() |> Crux.satisfiable?()
     end
   end
 
@@ -117,6 +132,11 @@ defmodule CruxTest do
         )
 
       assert {:a, {:b, false, true}, true} = tree
+    end
+
+    test "deals with simple booleans properly" do
+      assert true |> Formula.from_expression() |> Crux.decision_tree() == true
+      assert false |> Formula.from_expression() |> Crux.decision_tree() == false
     end
 
     property "decision tree paths match original expression semantics" do
@@ -252,6 +272,11 @@ defmodule CruxTest do
 
       # Should get scenario with :b filtered out since it's implied by :a
       assert scenarios_with_implications == [%{a: true, c: true}]
+    end
+
+    test "deals with simple booleans properly" do
+      assert [%{}] = true |> Formula.from_expression() |> Crux.satisfying_scenarios()
+      assert [] = false |> Formula.from_expression() |> Crux.satisfying_scenarios()
     end
 
     property "all scenarios satisfy the original expression" do

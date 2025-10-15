@@ -51,6 +51,9 @@ defmodule Crux do
            gadget_clauses: [Formula.clause()]
          }
 
+  @simple_true Formula.simple_true()
+  @simple_false Formula.simple_false()
+
   @doc """
   Solves a SAT formula and returns a satisfying assignment.
 
@@ -70,6 +73,10 @@ defmodule Crux do
   """
   @spec solve(Formula.t(variable)) :: {:ok, %{variable => boolean()}} | {:error, :unsatisfiable}
         when variable: term()
+  def solve(formula)
+  def solve(@simple_true), do: {:ok, %{}}
+  def solve(@simple_false), do: {:error, :unsatisfiable}
+
   def solve(%Formula{cnf: cnf, bindings: bindings}) do
     case Crux.Implementation.solve_expression(cnf) do
       {:ok, solution} -> {:ok, unbind_scenario(solution, bindings)}
@@ -92,6 +99,10 @@ defmodule Crux do
 
   """
   @spec satisfiable?(Formula.t()) :: boolean()
+  def satisfiable?(formula)
+  def satisfiable?(@simple_true), do: true
+  def satisfiable?(@simple_false), do: false
+
   def satisfiable?(%Formula{cnf: cnf}) do
     case Crux.Implementation.solve_expression(cnf) do
       {:ok, _solution} -> true
@@ -134,7 +145,11 @@ defmodule Crux do
   """
   @spec decision_tree(Formula.t(variable), opts(variable)) :: tree(variable)
         when variable: term()
-  def decision_tree(formula, opts \\ []) do
+  def decision_tree(formula, opts \\ [])
+  def decision_tree(@simple_true, _opts), do: true
+  def decision_tree(@simple_false, _opts), do: false
+
+  def decision_tree(formula, opts) do
     sorter = Keyword.get(opts, :sorter, &<=/2)
     variables = formula.bindings |> Map.values() |> Enum.sort(sorter)
     scenarios = satisfying_scenarios(formula, opts)
@@ -174,7 +189,11 @@ defmodule Crux do
   """
   @spec satisfying_scenarios(Formula.t(variable), opts(variable)) :: [%{variable => boolean()}]
         when variable: term()
-  def satisfying_scenarios(formula, opts \\ []) do
+  def satisfying_scenarios(formula, opts \\ [])
+  def satisfying_scenarios(@simple_true, _opts), do: [%{}]
+  def satisfying_scenarios(@simple_false, _opts), do: []
+
+  def satisfying_scenarios(formula, opts) do
     original_cnf = formula.cnf
     negation_encoding = build_negation_encoding(original_cnf)
 
@@ -276,11 +295,11 @@ defmodule Crux do
   # We only include variables from the formula bindings to avoid auxiliary SAT variables.
   @spec cube_from_model([Formula.literal()], [Formula.literal()]) :: [Formula.literal()]
   defp cube_from_model(solver_model, variable_ids) do
-    Enum.map(variable_ids, fn var_id ->
+    Enum.flat_map(variable_ids, fn var_id ->
       cond do
-        var_id in solver_model -> var_id
-        -var_id in solver_model -> -var_id
-        true -> var_id
+        var_id in solver_model -> [var_id]
+        -var_id in solver_model -> [-var_id]
+        true -> []
       end
     end)
   end
