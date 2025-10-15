@@ -7,5 +7,9 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 ## [v0.1.0](https://github.com/ash-project/crux/compare/v0.1.0...v0.1.0) (2025-10-15)
 
+### Features
+
+* Initial release (@maennchen)
+
 
 
