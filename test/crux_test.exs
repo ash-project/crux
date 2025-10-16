@@ -3,7 +3,10 @@
 # SPDX-License-Identifier: MIT
 
 defmodule CruxTest do
-  use ExUnit.Case, async: true
+  use ExUnit.Case,
+    async: false,
+    parameterize: [%{solver: Picosat}, %{solver: SimpleSat}]
+
   use ExUnitProperties
 
   import Crux.Expression, only: [b: 1]
@@ -12,6 +15,11 @@ defmodule CruxTest do
   alias Crux.Formula
 
   doctest Crux
+
+  setup %{solver: solver} do
+    Process.put(Crux.Implementation, solver)
+    :ok
+  end
 
   describe inspect(&Crux.solve/1) do
     test "finds a satisfying assignment for a satisfiable formula" do
