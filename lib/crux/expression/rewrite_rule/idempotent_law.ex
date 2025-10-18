@@ -22,7 +22,33 @@ defmodule Crux.Expression.RewriteRule.IdempotentLaw do
   import Crux.Expression, only: [b: 1]
 
   @impl Crux.Expression.RewriteRule
-  def walk(b(expr and expr)), do: expr
-  def walk(b(expr or expr)), do: expr
+  def walk({op, left, right}) do
+    list =
+      left
+      |> gather(op)
+      |> Enum.concat(gather(right, op))
+
+    uniq =
+      Enum.uniq(list)
+
+    case uniq do
+      [single] ->
+        single
+
+      multiple ->
+        if Enum.count(list) == Enum.count(uniq) do
+          {op, left, right}
+        else
+          Enum.reduce(multiple, &{op, &2, &1})
+        end
+    end
+  end
+
   def walk(other), do: other
+
+  defp gather({op, left, right}, op) do
+    gather(left, op) ++ gather(right, op)
+  end
+
+  defp gather(other, _), do: [other]
 end
