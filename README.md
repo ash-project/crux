@@ -42,7 +42,7 @@ Add `crux` to your list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:crux, "~> 0.1.1"},
+    {:crux, "~> 0.1.2"},
     # Choose one SAT solver backend:
     {:picosat_elixir, "~> 0.2"}, # Recommended: Fast NIF-based solver
     # OR

@@ -11,7 +11,7 @@ defmodule Crux.MixProject do
   Library for boolean satisfiability solving and expression manipulation.
   """
 
-  @version "0.1.1"
+  @version "0.1.2"
 
   def project do
     [
