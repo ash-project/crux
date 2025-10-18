@@ -24,8 +24,16 @@ defmodule Crux.Expression.RewriteRule.AbsorptionLaw do
 
   @impl Crux.Expression.RewriteRule
   def walk(b(expr and (expr or _other))), do: expr
+  def walk(b(expr and (_other or expr))), do: expr
+
   def walk(b((expr or _other) and expr)), do: expr
+  def walk(b((_other or expr) and expr)), do: expr
+
   def walk(b(expr or (expr and _other))), do: expr
+  def walk(b(expr or (_other and expr))), do: expr
+
   def walk(b((expr and _other) or expr)), do: expr
+  def walk(b((_other and expr) or expr)), do: expr
+
   def walk(other), do: other
 end

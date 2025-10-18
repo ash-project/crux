@@ -597,7 +597,6 @@ defmodule Crux.Expression do
         RewriteRule.AssociativityLaw,
         RewriteRule.DistributivityBasedSimplificationLaw,
         RewriteRule.ComplementLaw,
-        RewriteRule.CommutativityLaw,
         RewriteRule.TautologyLaw,
         RewriteRule.ConsensusTheorem,
         RewriteRule.UnitResolution
@@ -827,7 +826,6 @@ defmodule Crux.Expression do
     |> RewriteRule.AssociativityLaw.walk()
     |> RewriteRule.DistributivityBasedSimplificationLaw.walk()
     |> RewriteRule.ComplementLaw.walk()
-    |> RewriteRule.CommutativityLaw.walk()
     |> RewriteRule.TautologyLaw.walk()
     |> RewriteRule.ConsensusTheorem.walk()
     |> RewriteRule.UnitResolution.walk()
@@ -845,8 +843,8 @@ defmodule Crux.Expression do
 
       iex> # User roles - person can have at most one role
       ...> at_most_one([:admin, :user, :guest])
-      {:and, {:not, {:and, :guest, :user}},
-       {:and, {:not, {:and, :admin, :guest}}, {:not, {:and, :admin, :user}}}}
+      {:and, {:and, {:not, {:and, :admin, :user}}, {:not, {:and, :admin, :guest}}},
+       {:not, {:and, :guest, :user}}}
 
       iex> # Payment methods - choose at most one option
       ...> at_most_one([:credit_card, :paypal])
@@ -896,13 +894,13 @@ defmodule Crux.Expression do
       iex> # Database transaction - both happen or neither
       ...> all_or_none([:begin_transaction, :commit_transaction])
       {:not,
-       {:and, {:not, {:and, :begin_transaction, :commit_transaction}},
-        {:or, :begin_transaction, :commit_transaction}}}
+       {:and, {:or, :begin_transaction, :commit_transaction},
+        {:not, {:and, :begin_transaction, :commit_transaction}}}}
 
       iex> # Feature flags - UI and API dark mode go together
       ...> all_or_none([:dark_mode_ui, :dark_mode_api])
       {:not,
-       {:and, {:not, {:and, :dark_mode_api, :dark_mode_ui}}, {:or, :dark_mode_api, :dark_mode_ui}}}
+       {:and, {:or, :dark_mode_api, :dark_mode_ui}, {:not, {:and, :dark_mode_api, :dark_mode_ui}}}}
 
       iex> # Empty list always satisfied
       ...> all_or_none([])
@@ -951,7 +949,7 @@ defmodule Crux.Expression do
 
       iex> # User preference - must pick exactly one theme
       ...> exactly_one([:light_theme, :dark_theme])
-      {:and, {:not, {:and, :dark_theme, :light_theme}}, {:or, :dark_theme, :light_theme}}
+      {:and, {:or, :light_theme, :dark_theme}, {:not, {:and, :light_theme, :dark_theme}}}
 
       iex> # Empty list can never satisfy exactly one
       ...> exactly_one([])
