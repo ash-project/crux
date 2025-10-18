@@ -23,20 +23,20 @@ defmodule Crux.FormulaTest do
 
       assert %Formula{
                cnf: [
-                 # :a or not :c
-                 [1, -2],
-                 # not :b or not :c
-                 [-3, -2],
                  # :a or :d
-                 [1, 4],
+                 [1, 2],
                  # not :b or :d
-                 [-3, 4]
+                 [-3, 2],
+                 # :a or not :c
+                 [1, -4],
+                 # not :b or not :c
+                 [-3, -4]
                ],
                bindings: %{
                  1 => :a,
-                 2 => :c,
+                 2 => :d,
                  3 => :b,
-                 4 => :d
+                 4 => :c
                }
              } = result
     end
