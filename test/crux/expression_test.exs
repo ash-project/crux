@@ -531,6 +531,19 @@ defmodule Crux.ExpressionTest do
       refute :never_evaluated in visited
     end
 
+    test "simplifies or with boolean" do
+      expr = b(false or :needs_to_be_evaluated)
+
+      {result, visited} =
+        Expression.expand(expr, [], fn node, visited ->
+          {node, [node | visited]}
+        end)
+
+      assert :needs_to_be_evaluated = result
+      # Should visit :needs_to_be_evaluated
+      assert :needs_to_be_evaluated in visited
+    end
+
     test "short-circuits on false in and" do
       expr = b(false and :never_evaluated)
 
@@ -542,6 +555,62 @@ defmodule Crux.ExpressionTest do
       refute result
       # Should not visit :never_evaluated
       refute :never_evaluated in visited
+    end
+
+    test "siplifies and with boolean" do
+      expr = b(true and :needs_to_be_evaluated)
+
+      {result, visited} =
+        Expression.expand(expr, [], fn node, visited ->
+          {node, [node | visited]}
+        end)
+
+      assert :needs_to_be_evaluated = result
+      # Should visit :needs_to_be_evaluated
+      assert :needs_to_be_evaluated in visited
+    end
+
+    test "simplifies complex nested expressions" do
+      # Test that complex expressions are properly simplified before expansion
+      expr = b((true and :a) or (false and :b))
+
+      {result, visited} =
+        Expression.expand(expr, [], fn node, visited ->
+          {node, [node | visited]}
+        end)
+
+      assert :a = result
+      assert :a in visited
+      refute :b in visited
+    end
+
+    test "callback receives simplified expressions" do
+      # Test that callbacks receive already-simplified expressions
+      expr = b(not (not :a))
+
+      {result, visited} =
+        Expression.expand(expr, [], fn node, visited ->
+          {node, [node | visited]}
+        end)
+
+      assert :a = result
+      assert :a in visited
+      # Should not visit the double negation
+      refute {:not, {:not, :a}} in visited
+    end
+
+    test "handles deeply nested boolean simplification" do
+      # Test complex boolean algebra simplification
+      expr = b((false or :x) and (true or :y))
+
+      {result, visited} =
+        Expression.expand(expr, [], fn node, visited ->
+          {node, [node | visited]}
+        end)
+
+      assert :x = result
+      assert :x in visited
+      refute :y in visited
     end
 
     test "evaluates both sides when no short-circuit" do
@@ -571,6 +640,26 @@ defmodule Crux.ExpressionTest do
       result = Expression.expand(expr, fn node -> node end)
 
       assert result
+    end
+
+    test "problematic real-life test case" do
+      expr =
+        b(
+          not ((:action_type_create or :action_type_update) and
+                 not ((:action_type_create or :action_type_update) and :changeset_only_check))
+        )
+
+      {result, visited} =
+        Expression.expand(expr, [], fn
+          :action_type_create, visited -> {false, [:action_type_create | visited]}
+          :action_type_update, visited -> {false, [:action_type_update | visited]}
+          node, visited -> {node, [node | visited]}
+        end)
+
+      assert result == true
+      assert :action_type_create in visited
+      assert :action_type_update in visited
+      refute :changeset_only_check in visited
     end
   end
 
