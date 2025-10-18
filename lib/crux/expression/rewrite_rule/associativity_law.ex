@@ -25,8 +25,16 @@ defmodule Crux.Expression.RewriteRule.AssociativityLaw do
 
   @impl Crux.Expression.RewriteRule
   def walk(b(expr or (expr or other))), do: b(expr or other)
+  def walk(b(expr or (other or expr))), do: b(expr or other)
+
   def walk(b(expr or other or expr)), do: b(expr or other)
+  def walk(b(other or expr or expr)), do: b(expr or other)
+
   def walk(b(expr and (expr and other))), do: b(expr and other)
+  def walk(b(expr and (other and expr))), do: b(expr and other)
+
   def walk(b(expr and other and expr)), do: b(expr and other)
+  def walk(b(other and expr and expr)), do: b(expr and other)
+
   def walk(other), do: other
 end

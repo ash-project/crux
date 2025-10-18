@@ -30,7 +30,12 @@ defmodule Crux.Expression.RewriteRule.ComplementLaw do
   def walk(b(not expr or expr)), do: true
   def walk(b(expr and not expr)), do: false
   def walk(b(not expr and expr)), do: false
+
   def walk(b((expr and left) or (expr and not left))), do: expr
+  def walk(b((left and expr) or (not left and expr))), do: expr
+
   def walk(b((expr or left) and (expr or not left))), do: expr
+  def walk(b((left or expr) and (not left or expr))), do: expr
+
   def walk(other), do: other
 end

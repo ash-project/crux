@@ -607,7 +607,7 @@ defmodule Crux.ExpressionTest do
 
     test "creates xnor constraint for two variables" do
       result = Expression.all_or_none([:a, :b])
-      assert result == b(not (not (:a and :b) and (:a or :b)))
+      assert result == b(not ((:a or :b) and not (:a and :b)))
     end
 
     test "models feature flags correctly" do
@@ -636,7 +636,7 @@ defmodule Crux.ExpressionTest do
     test "creates constraints for exactly one of two variables" do
       result = Expression.exactly_one([:a, :b])
       # Should be: (at least one) AND (at most one)
-      assert result == b(not (:a and :b) and (:a or :b))
+      assert result == b((:a or :b) and not (:a and :b))
     end
 
     test "models order status correctly" do
