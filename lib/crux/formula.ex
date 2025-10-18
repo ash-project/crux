@@ -113,8 +113,8 @@ defmodule Crux.Formula do
   @spec from_expression(Expression.t(variable)) :: t(variable) when variable: term()
   def from_expression(expression) do
     expression
-    # Expand Booleans so that they do not become variables
-    |> Expression.run(& &1)
+    |> Expression.balance()
+    |> Expression.simplify()
     |> case do
       true ->
         @simple_true
