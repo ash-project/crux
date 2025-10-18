@@ -722,8 +722,7 @@ defmodule Crux.Expression do
           {t(variable), acc}
         when variable: term(), acc: term()
   def expand(expression, acc, callback) do
-    {result, acc} = do_expand(expression, acc, callback)
-    {simplify_one_expression(result), acc}
+    expression |> simplify() |> do_expand(acc, callback)
   end
 
   @doc """
@@ -743,7 +742,11 @@ defmodule Crux.Expression do
   @spec expand(expression :: t(variable), callback :: (t(variable) -> t(variable))) :: t(variable)
         when variable: term()
   def expand(expression, callback) do
-    {result, _acc} = expand(expression, nil, fn expr, nil -> {callback.(expr), nil} end)
+    {result, _acc} =
+      expression
+      |> simplify()
+      |> expand(nil, fn expr, nil -> {callback.(expr), nil} end)
+
     result
   end
 
@@ -758,62 +761,87 @@ defmodule Crux.Expression do
 
   defp do_expand(b(left or right), acc, callback) do
     left
-    |> simplify_one_expression()
     |> do_expand(acc, callback)
+    |> simplify_after_expansion()
     |> case do
       {true, acc} ->
-        callback.(true, acc)
+        {true, acc}
+
+      {false, acc} ->
+        do_expand(right, acc, callback)
 
       {left, acc} ->
         right
-        |> simplify_one_expression()
         |> do_expand(acc, callback)
+        |> simplify_after_expansion()
         |> case do
           {true, acc} ->
-            callback.(true, acc)
+            {true, acc}
+
+          {false, acc} ->
+            {left, acc}
 
           {right, acc} ->
-            callback.(b(left or right), acc)
+            {b(left or right), acc}
         end
     end
+    |> simplify_after_expansion()
   end
 
   defp do_expand(b(left and right), acc, callback) do
     left
-    |> simplify_one_expression()
     |> do_expand(acc, callback)
+    |> simplify_after_expansion()
     |> case do
       {false, acc} ->
-        callback.(false, acc)
+        {false, acc}
+
+      {true, acc} ->
+        do_expand(right, acc, callback)
 
       {left, acc} ->
         right
-        |> simplify_one_expression()
         |> do_expand(acc, callback)
+        |> simplify_after_expansion()
         |> case do
           {false, acc} ->
-            callback.(false, acc)
+            {false, acc}
+
+          {true, acc} ->
+            {left, acc}
 
           {right, acc} ->
-            callback.(b(left and right), acc)
+            {b(left and right), acc}
         end
     end
   end
 
   defp do_expand(b(not expr), acc, callback) do
-    case do_expand(expr, acc, callback) do
+    expr
+    |> do_expand(acc, callback)
+    |> simplify_after_expansion()
+    |> case do
       {true, acc} ->
-        callback.(false, acc)
+        {false, acc}
 
       {false, acc} ->
-        callback.(true, acc)
+        {true, acc}
+
+      {b(not expr), acc} ->
+        {expr, acc}
 
       {expr, acc} ->
-        callback.(b(not expr), acc)
+        {b(not expr), acc}
     end
   end
 
-  defp do_expand(other, acc, callback), do: other |> simplify_one_expression() |> callback.(acc)
+  defp do_expand(other, acc, callback), do: callback.(other, acc)
+
+  @spec simplify_after_expansion({expression :: t(variable), acc :: acc}) :: {t(variable), acc}
+        when variable: term(), acc: term()
+  defp simplify_after_expansion({expression, acc}) do
+    {simplify_one_expression(expression), acc}
+  end
 
   @spec simplify_one_expression(expression :: t(variable)) :: t(variable) when variable: term()
   defp simplify_one_expression(expression) do
