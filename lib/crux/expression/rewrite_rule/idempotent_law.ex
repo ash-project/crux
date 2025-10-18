@@ -19,8 +19,6 @@ defmodule Crux.Expression.RewriteRule.IdempotentLaw do
 
   use Crux.Expression.RewriteRule
 
-  import Crux.Expression, only: [b: 1]
-
   @impl Crux.Expression.RewriteRule
   def walk({op, left, right}) do
     list =
