@@ -473,6 +473,12 @@ defmodule Crux.ExpressionTest do
       result = Expression.simplify(expr)
       assert result == :a
     end
+
+    test "simplifies a boolean expression deeply nested" do
+      expr = b(:a and (:b and (:a and :c)))
+      result = Expression.simplify(expr)
+      assert result == Expression.simplify(b(:a and :b and :c))
+    end
   end
 
   describe inspect(&Expression.balance/1) do
