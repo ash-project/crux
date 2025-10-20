@@ -26,7 +26,7 @@ defmodule Crux.Expression.RewriteRule.DeMorgansLaw do
   def needs_reapplication?, do: true
 
   @impl RewriteRule
-  def walk(b(nand(left, right))), do: b(not left or not right)
-  def walk(b(nor(left, right))), do: b(not left and not right)
+  def walk(b(not (left and right))), do: b(not left or not right)
+  def walk(b(not (left or right))), do: b(not left and not right)
   def walk(other), do: other
 end
