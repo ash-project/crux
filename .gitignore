@@ -25,6 +25,3 @@ crux-*.tar
 
 # Temporary files, for example, from tests.
 /tmp/
-
-# Ignore Mix Lock for Library
-mix.lock
