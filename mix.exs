@@ -78,7 +78,7 @@ defmodule Crux.MixProject do
       {:sobelow, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:stream_data, "~> 1.0", optional: true},
       {:styler, "~> 1.9", only: [:dev, :test], runtime: false},
-      {:usage_rules, "~> 0.1", only: [:dev]}
+      {:usage_rules, "~> 1.2", only: [:dev]}
     ]
   end
 end
