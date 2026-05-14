@@ -749,6 +749,50 @@ defmodule Crux.ExpressionTest do
       # No status is invalid
       assert Expression.run(constraint, &%{pending: false, shipped: false}[&1]) == false
     end
+
+    test "exactly one of three variables — each singleton valid" do
+      constraint = Expression.exactly_one([:a, :b, :c])
+
+      assert Expression.run(constraint, &%{a: true, b: false, c: false}[&1]) == true
+      assert Expression.run(constraint, &%{a: false, b: true, c: false}[&1]) == true
+      assert Expression.run(constraint, &%{a: false, b: false, c: true}[&1]) == true
+    end
+
+    test "exactly one of three variables — pairs invalid" do
+      constraint = Expression.exactly_one([:a, :b, :c])
+
+      assert Expression.run(constraint, &%{a: true, b: true, c: false}[&1]) == false
+      assert Expression.run(constraint, &%{a: true, b: false, c: true}[&1]) == false
+      assert Expression.run(constraint, &%{a: false, b: true, c: true}[&1]) == false
+    end
+
+    test "exactly one of three variables — all true invalid" do
+      constraint = Expression.exactly_one([:a, :b, :c])
+      assert Expression.run(constraint, &%{a: true, b: true, c: true}[&1]) == false
+    end
+
+    test "exactly one of three variables — none true invalid" do
+      constraint = Expression.exactly_one([:a, :b, :c])
+      assert Expression.run(constraint, &%{a: false, b: false, c: false}[&1]) == false
+    end
+
+    test "exactly one of four variables enforced by SAT solver" do
+      alias Crux.Formula
+
+      constraint = Expression.exactly_one([:a, :b, :c, :d])
+      formula = Formula.from_expression(constraint)
+
+      # Two variables true should be unsatisfiable when combined
+      both_true = Formula.from_expression({:and, constraint, {:and, :a, :b}})
+      assert Crux.satisfiable?(both_true) == false
+
+      # One variable true should be satisfiable
+      one_true = Formula.from_expression({:and, constraint, :a})
+      assert Crux.satisfiable?(one_true) == true
+
+      # Base formula is satisfiable
+      assert Crux.satisfiable?(formula) == true
+    end
   end
 
   @spec var_as_fun(atom()) :: Macro.t()

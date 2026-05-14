@@ -977,7 +977,7 @@ defmodule Crux.Expression do
 
       iex> # User preference - must pick exactly one theme
       ...> exactly_one([:light_theme, :dark_theme])
-      {:and, {:or, :light_theme, :dark_theme}, {:not, {:and, :light_theme, :dark_theme}}}
+      {:and, {:or, :light_theme, :dark_theme}, {:not, {:and, :dark_theme, :light_theme}}}
 
       iex> # Empty list can never satisfy exactly one
       ...> exactly_one([])
@@ -1003,8 +1003,8 @@ defmodule Crux.Expression do
   """
   @spec exactly_one([variable]) :: t(variable) when variable: term()
   def exactly_one(variables) do
-    variables
-    |> Enum.reduce(false, &b((&2 or &1) and nand(&2, &1)))
+    at_least_one = Enum.reduce(variables, false, fn v, acc -> {:or, acc, v} end)
+    {:and, at_least_one, at_most_one(variables)}
     |> simplify()
   end
 end
