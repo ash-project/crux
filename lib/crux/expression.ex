@@ -1004,7 +1004,6 @@ defmodule Crux.Expression do
   @spec exactly_one([variable]) :: t(variable) when variable: term()
   def exactly_one(variables) do
     at_least_one = Enum.reduce(variables, false, fn v, acc -> {:or, acc, v} end)
-    {:and, at_least_one, at_most_one(variables)}
-    |> simplify()
+    simplify({:and, at_least_one, at_most_one(variables)})
   end
 end
