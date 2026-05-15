@@ -157,7 +157,8 @@ defmodule Crux.FormulaTest do
       [_header | body_lines] = String.split(result, "\n")
       assert length(body_lines) == length(formula.cnf)
 
-      Enum.zip(body_lines, formula.cnf)
+      body_lines
+      |> Enum.zip(formula.cnf)
       |> Enum.each(fn {line, clause} ->
         assert line == Enum.join(clause, " ") <> " 0"
       end)

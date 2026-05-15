@@ -388,5 +388,4 @@ defmodule Crux.Formula do
 
   defp literal_to_expression(literal, bindings) when literal < 0,
     do: b(not Map.fetch!(bindings, -literal))
-
 end
