@@ -195,7 +195,7 @@ defmodule Crux do
 
   def satisfying_scenarios(formula, opts) do
     original_cnf = formula.cnf
-    negation_encoding = build_negation_encoding(original_cnf)
+    negation_encoding = build_negation_encoding(formula)
 
     formula
     |> enumerate_dimacs_scenarios(original_cnf, negation_encoding, [])
@@ -346,27 +346,41 @@ defmodule Crux do
   end
 
   # Builds an encoding for the negation of a CNF formula.
-  # Creates selector variables for each clause and gadget clauses that encode:
-  # "if selector_i is true, then clause_i is false"
-  # Used for implication testing via satisfiability checking.
-  @spec build_negation_encoding(Formula.cnf()) :: negation_encoding()
-  defp build_negation_encoding(cnf) do
+  # Creates selector variables for each "assertion" clause and gadget clauses
+  # that encode: "if selector_i is true, then assertion_i is false".
+  # Tseitin-encoded formulas include `definitions` — clauses that bind
+  # auxiliary variables to sub-expressions and must always hold (they are
+  # not part of the semantic content being implied). Those are appended
+  # verbatim so they remain required in implication queries.
+  @spec build_negation_encoding(Formula.t(variable)) :: negation_encoding()
+        when variable: term()
+  defp build_negation_encoding(%Formula{cnf: cnf, definitions: definitions}) do
+    assertions =
+      case definitions do
+        [] ->
+          cnf
+
+        _ ->
+          definition_set = MapSet.new(definitions)
+          Enum.reject(cnf, &MapSet.member?(definition_set, &1))
+      end
+
     variables = cnf |> List.flatten() |> Enum.map(&abs/1)
     max_variable_id = Enum.max([0 | variables])
-    clause_count = length(cnf)
+    clause_count = length(assertions)
 
     first_selector = max_variable_id + 1
     last_selector = max_variable_id + clause_count
     selector_vars = Enum.to_list(first_selector..last_selector//1)
 
     encoding_clauses =
-      cnf
+      assertions
       |> Enum.zip(selector_vars)
       |> Enum.flat_map(fn {clause, selector_var} ->
         Enum.map(clause, fn literal -> [-selector_var, -literal] end)
       end)
 
-    %{selectors: selector_vars, gadget_clauses: encoding_clauses}
+    %{selectors: selector_vars, gadget_clauses: encoding_clauses ++ definitions}
   end
 
   # Adds a blocking clause to prevent rediscovering the same minimal assignment.
@@ -385,9 +399,21 @@ defmodule Crux do
         }
         when variable: term()
   defp unbind_scenario(scenario, bindings) do
-    Map.new(scenario, fn
-      literal when literal > 0 -> {Map.fetch!(bindings, literal), true}
-      literal when literal < 0 -> {Map.fetch!(bindings, -literal), false}
+    # Tseitin-encoded formulas include auxiliary variable ids in the
+    # solver's model. Those ids are absent from `bindings`, so we silently
+    # drop them — only user-supplied variables appear in returned scenarios.
+    Enum.reduce(scenario, %{}, fn literal, acc ->
+      {id, value} =
+        if literal > 0 do
+          {literal, true}
+        else
+          {-literal, false}
+        end
+
+      case bindings do
+        %{^id => variable} -> Map.put(acc, variable, value)
+        _ -> acc
+      end
     end)
   end
 

@@ -27,11 +27,10 @@ defmodule CruxTest do
 
       assert {:ok, result} = Crux.solve(formula)
 
-      assert result in [
-               %{a: true},
-               %{b: true},
-               %{a: true, b: true}
-             ]
+      # Any assignment over {:a, :b} that makes (:a or :b) true is valid.
+      defaults = %{a: false, b: false}
+      assignment = Map.merge(defaults, result)
+      assert assignment.a or assignment.b
     end
 
     test "returns :unsatisfiable for an unsatisfiable formula" do

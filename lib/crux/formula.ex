@@ -19,7 +19,9 @@ defmodule Crux.Formula do
   @type t(variable) :: %__MODULE__{
           cnf: cnf(),
           bindings: bindings(variable),
-          reverse_bindings: reverse_bindings(variable)
+          reverse_bindings: reverse_bindings(variable),
+          definitions: definitions(),
+          auxiliaries: auxiliaries()
         }
 
   @typedoc """
@@ -76,46 +78,88 @@ defmodule Crux.Formula do
   """
   @type bindings() :: bindings(term())
 
-  @enforce_keys [:cnf, :bindings, :reverse_bindings]
-  defstruct [:cnf, :bindings, :reverse_bindings]
+  @typedoc """
+  Auxiliary definition clauses produced by Tseitin encoding.
 
-  @simple_true %{__struct__: __MODULE__, cnf: [], bindings: %{}, reverse_bindings: %{}}
+  These clauses bind each auxiliary variable to the truth value of the
+  sub-expression it represents. They are a subset of `cnf/0` and must
+  always hold; consumers performing implication tests must not negate
+  them.
+  """
+  @type definitions() :: [clause()]
+
+  @typedoc """
+  The set of variable ids introduced by Tseitin encoding.
+
+  Auxiliary ids appear in `cnf/0` but never in `bindings/1`.
+  """
+  @type auxiliaries() :: MapSet.t(pos_integer())
+
+  @enforce_keys [:cnf, :bindings, :reverse_bindings]
+  defstruct [
+    :cnf,
+    :bindings,
+    :reverse_bindings,
+    definitions: [],
+    auxiliaries: MapSet.new()
+  ]
+
+  @simple_true %{
+    __struct__: __MODULE__,
+    cnf: [],
+    bindings: %{},
+    reverse_bindings: %{},
+    definitions: [],
+    auxiliaries: MapSet.new()
+  }
   @simple_false %{
     __struct__: __MODULE__,
     cnf: [[1], [-1]],
     bindings: %{1 => false},
-    reverse_bindings: %{false => 1}
+    reverse_bindings: %{false => 1},
+    definitions: [],
+    auxiliaries: MapSet.new()
   }
 
   @doc """
   Converts a boolean expression to a SAT formula in Conjunctive Normal Form (CNF).
 
+  The CNF is produced via the Tseitin transformation: each compound
+  sub-expression gets a fresh auxiliary variable and a small set of
+  "definition" clauses that bind the auxiliary to the sub-expression's
+  truth value. The resulting CNF grows linearly with the size of the
+  input — the naive distributive-law approach can blow up
+  exponentially. Auxiliary variables never appear in `:bindings` or in
+  scenarios returned by `Crux.solve/1` and `Crux.satisfying_scenarios/2`.
+
+  `to_expression/1` reverses the encoding by substituting each auxiliary
+  with its definition and simplifying.
+
   ## Examples
 
       iex> import Crux.Expression
-      ...> expression = b(:a and :b)
-      ...> Formula.from_expression(expression)
-      %Formula{
-        cnf: [[1], [2]],
-        bindings: %{1 => :a, 2 => :b},
-        reverse_bindings: %{a: 1, b: 2}
-      }
+      ...> formula = Formula.from_expression(b(:a and :b))
+      ...> formula.bindings
+      %{1 => :a, 2 => :b}
+      iex> Formula.to_expression(formula)
+      b(:a and :b)
 
-      iex> expression = b(:x or not :y)
-      ...> Formula.from_expression(expression)
-      %Formula{
-        cnf: [[1, -2]],
-        bindings: %{1 => :x, 2 => :y},
-        reverse_bindings: %{x: 1, y: 2}
-      }
+      iex> import Crux.Expression
+      ...> formula = Formula.from_expression(b(:x or not :y))
+      ...> formula.bindings
+      %{1 => :x, 2 => :y}
+      iex> Formula.to_expression(formula)
+      b(:x or not :y)
 
   """
   @spec from_expression(Expression.t(variable)) :: t(variable) when variable: term()
   def from_expression(expression) do
-    expression
-    |> Expression.balance()
-    |> Expression.simplify()
-    |> case do
+    simplified =
+      expression
+      |> Expression.balance()
+      |> Expression.simplify()
+
+    case simplified do
       true ->
         @simple_true
 
@@ -123,15 +167,20 @@ defmodule Crux.Formula do
         @simple_false
 
       expression ->
-        {bindings, reverse_bindings, expression} =
-          expression
-          |> Expression.to_cnf()
-          |> extract_bindings()
+        %{
+          cnf: cnf,
+          definitions: definitions,
+          bindings: bindings,
+          reverse_bindings: reverse_bindings,
+          auxiliaries: auxiliaries
+        } = Crux.Formula.Tseitin.transform(expression)
 
         %__MODULE__{
-          cnf: expression |> lift_clauses() |> Enum.uniq(),
+          cnf: cnf,
           bindings: bindings,
-          reverse_bindings: reverse_bindings
+          reverse_bindings: reverse_bindings,
+          definitions: definitions,
+          auxiliaries: auxiliaries
         }
     end
   end
@@ -139,16 +188,22 @@ defmodule Crux.Formula do
   @doc """
   Converts a SAT formula back to a boolean expression.
 
+  For Tseitin-encoded formulas (the output of `from_expression/1`), this
+  substitutes each auxiliary variable with its definition and simplifies
+  — recovering an expression equivalent to the original source.
+
+  Formulas constructed manually with no auxiliaries are walked
+  clause-by-clause, mapping each literal back through `:bindings`.
+
   ## Examples
 
-      iex> formula = %Formula{
-      ...>   cnf: [[1], [2]],
-      ...>   bindings: %{1 => :a, 2 => :b},
-      ...>   reverse_bindings: %{a: 1, b: 2}
-      ...> }
-      ...>
-      ...> Formula.to_expression(formula)
+      iex> import Crux.Expression
+      ...> Formula.to_expression(Formula.from_expression(b(:a and :b)))
       b(:a and :b)
+
+      iex> import Crux.Expression
+      ...> Formula.to_expression(Formula.from_expression(b(:x or not :y)))
+      b(:x or not :y)
 
       iex> formula = %Formula{
       ...>   cnf: [[1, -2]],
@@ -160,15 +215,122 @@ defmodule Crux.Formula do
       b(:x or not :y)
 
   """
-  @spec to_expression(formula :: t(variable)) :: Expression.cnf(variable) when variable: term()
+  @spec to_expression(formula :: t(variable)) :: Expression.t(variable) when variable: term()
   def to_expression(formula)
   def to_expression(@simple_true), do: true
   def to_expression(@simple_false), do: false
 
-  def to_expression(%__MODULE__{cnf: cnf, bindings: bindings}) do
-    cnf
-    |> Enum.map(&clause_to_expression(&1, bindings))
-    |> Enum.reduce(&b(&2 and &1))
+  def to_expression(%__MODULE__{
+        cnf: cnf,
+        bindings: bindings,
+        definitions: definitions,
+        auxiliaries: auxiliaries
+      }) do
+    if MapSet.size(auxiliaries) == 0 do
+      # Plain CNF (e.g. hand-constructed) — walk the clauses directly.
+      cnf
+      |> Enum.map(&clause_to_expression(&1, bindings))
+      |> Enum.reduce(&b(&2 and &1))
+    else
+      definition_set = MapSet.new(definitions)
+      assertions = Enum.reject(cnf, &MapSet.member?(definition_set, &1))
+
+      aux_definitions = build_aux_definitions(definitions, auxiliaries)
+
+      assertions
+      |> Enum.map(&clause_to_expanded_expression(&1, aux_definitions, bindings))
+      |> Enum.reduce(&b(&2 and &1))
+      |> Expression.simplify()
+    end
+  end
+
+  # Recovers `aux_id => {:and | :or, [literal]}` from the Tseitin
+  # definition clauses. Tseitin produces three definition clauses per
+  # auxiliary; only the "long" clause (length ≥ 3) is needed — its
+  # polarity pattern tells us whether the auxiliary represents an AND
+  # (one positive literal, rest negative) or an OR (one negative
+  # literal, rest positive). Children are encoded before parents, so the
+  # auxiliary being defined is always the literal with the largest
+  # absolute id in the clause.
+  @spec build_aux_definitions(definitions(), auxiliaries()) :: %{
+          pos_integer() => {:and | :or, [literal()]}
+        }
+  defp build_aux_definitions(definitions, auxiliaries) do
+    definitions
+    |> Enum.filter(&(length(&1) >= 3))
+    |> Enum.flat_map(fn clause ->
+      max_lit =
+        Enum.max_by(clause, &abs/1)
+
+      aux_id = abs(max_lit)
+
+      if MapSet.member?(auxiliaries, aux_id) do
+        others = Enum.reject(clause, &(abs(&1) == aux_id))
+
+        definition =
+          if max_lit > 0 do
+            # AND: long clause is (¬op_1 ∨ ¬op_2 ∨ aux); operands are
+            # the literals' negations.
+            {:and, Enum.map(others, &(-&1))}
+          else
+            # OR: long clause is (¬aux ∨ op_1 ∨ op_2); operands appear
+            # with their natural polarity.
+            {:or, others}
+          end
+
+        [{aux_id, definition}]
+      else
+        []
+      end
+    end)
+    |> Map.new()
+  end
+
+  @spec clause_to_expanded_expression(
+          clause(),
+          %{pos_integer() => {:and | :or, [literal()]}},
+          bindings(variable)
+        ) :: Expression.t(variable)
+        when variable: term()
+  defp clause_to_expanded_expression(clause, aux_definitions, bindings) do
+    clause
+    |> Enum.map(&literal_to_expanded_expression(&1, aux_definitions, bindings))
+    |> Enum.reduce(&b(&2 or &1))
+  end
+
+  @spec literal_to_expanded_expression(
+          literal(),
+          %{pos_integer() => {:and | :or, [literal()]}},
+          bindings(variable)
+        ) :: Expression.t(variable)
+        when variable: term()
+  defp literal_to_expanded_expression(literal, aux_definitions, bindings) when literal > 0,
+    do: resolve_id(literal, aux_definitions, bindings)
+
+  defp literal_to_expanded_expression(literal, aux_definitions, bindings) when literal < 0,
+    do: b(not resolve_id(-literal, aux_definitions, bindings))
+
+  @spec resolve_id(
+          pos_integer(),
+          %{pos_integer() => {:and | :or, [literal()]}},
+          bindings(variable)
+        ) :: Expression.t(variable)
+        when variable: term()
+  defp resolve_id(id, aux_definitions, bindings) do
+    case Map.fetch(aux_definitions, id) do
+      {:ok, {:and, operands}} ->
+        operands
+        |> Enum.map(&literal_to_expanded_expression(&1, aux_definitions, bindings))
+        |> Enum.reduce(&b(&2 and &1))
+
+      {:ok, {:or, operands}} ->
+        operands
+        |> Enum.map(&literal_to_expanded_expression(&1, aux_definitions, bindings))
+        |> Enum.reduce(&b(&2 or &1))
+
+      :error ->
+        Map.fetch!(bindings, id)
+    end
   end
 
   @doc """
@@ -177,17 +339,20 @@ defmodule Crux.Formula do
   Takes a formula struct and returns a string in the DIMACS CNF format
   that can be consumed by SAT solvers like PicoSAT.
 
+  The header reports the highest variable id used in the CNF, which
+  includes Tseitin auxiliary variables.
+
   ## Examples
 
       iex> alias Crux.{Expression, Formula}
-      ...> formula = Formula.from_expression(Expression.b(:a and :b))
+      ...> formula = Formula.from_expression(Expression.b(:a))
       ...> Formula.to_picosat(formula)
-      "p cnf 2 2\\n1 0\\n2 0"
+      "p cnf 1 1\\n1 0"
 
   """
   @spec to_picosat(t()) :: String.t()
-  def to_picosat(%__MODULE__{cnf: clauses, bindings: bindings}) do
-    variable_count = map_size(bindings)
+  def to_picosat(%__MODULE__{cnf: clauses, bindings: bindings, auxiliaries: auxiliaries}) do
+    variable_count = map_size(bindings) + MapSet.size(auxiliaries)
     clause_count = length(clauses)
 
     formatted_input =
@@ -224,52 +389,4 @@ defmodule Crux.Formula do
   defp literal_to_expression(literal, bindings) when literal < 0,
     do: b(not Map.fetch!(bindings, -literal))
 
-  @spec extract_bindings(expression :: Expression.t(variable)) ::
-          {bindings(variable), reverse_bindings(variable), Expression.t(literal())}
-        when variable: term()
-  defp extract_bindings(expression) do
-    {expression, bindings} = Expression.postwalk(expression, %{current: 1}, &bind_variable/2)
-
-    reverse_bindings = Map.delete(bindings, :current)
-    forward_bindings = Map.new(reverse_bindings, &{elem(&1, 1), elem(&1, 0)})
-
-    {forward_bindings, reverse_bindings, expression}
-  end
-
-  @spec bind_variable(Expression.t(variable), bindings_map) ::
-          {pos_integer() | Expression.t(variable), bindings_map}
-        when variable: term(),
-             bindings_map: %{required(:current) => pos_integer(), variable => pos_integer()}
-  defp bind_variable(expr, bindings)
-
-  defp bind_variable(value, %{current: current} = bindings) when Expression.is_variable(value) do
-    case Map.fetch(bindings, value) do
-      :error ->
-        {current, bindings |> Map.update!(:current, &(&1 + 1)) |> Map.put(value, current)}
-
-      {:ok, binding} ->
-        {binding, bindings}
-    end
-  end
-
-  defp bind_variable(expr, bindings) when not is_boolean(expr) do
-    {expr, bindings}
-  end
-
-  @spec lift_clauses(expression :: Expression.cnf_conjunction(literal())) :: cnf()
-  defp lift_clauses(expression)
-  defp lift_clauses(b(left and right)), do: lift_clauses(left) ++ lift_clauses(right)
-
-  defp lift_clauses(b(left or right)),
-    do: [flatten_or_literals(left) ++ flatten_or_literals(right)]
-
-  defp lift_clauses(b(not value)), do: [[-value]]
-  defp lift_clauses(value), do: [[value]]
-
-  @spec flatten_or_literals(expression :: Expression.cnf_clause(literal())) :: [literal()]
-  defp flatten_or_literals(b(left or right)),
-    do: flatten_or_literals(left) ++ flatten_or_literals(right)
-
-  defp flatten_or_literals(b(not value)), do: [-value]
-  defp flatten_or_literals(value), do: [value]
 end
