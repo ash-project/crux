@@ -11,6 +11,7 @@ defmodule Crux.Formula do
   import Crux.Expression, only: [b: 1]
 
   alias Crux.Expression
+  alias Crux.Formula.Tseitin
 
   @typedoc """
   A satisfiability formula in Conjunctive Normal Form (CNF) along with
@@ -173,7 +174,7 @@ defmodule Crux.Formula do
           bindings: bindings,
           reverse_bindings: reverse_bindings,
           auxiliaries: auxiliaries
-        } = Crux.Formula.Tseitin.transform(expression)
+        } = Tseitin.transform(expression)
 
         %__MODULE__{
           cnf: cnf,

@@ -21,6 +21,7 @@ defmodule Crux.MixProject do
       start_permanent: Mix.env() == :prod,
       package: package(),
       deps: deps(),
+      aliases: aliases(),
       docs: &docs/0,
       description: @description,
       source_url: "https://github.com/ash-project/crux",
@@ -61,11 +62,17 @@ defmodule Crux.MixProject do
     ]
   end
 
+  defp aliases do
+    [
+      credo: "credo --strict"
+    ]
+  end
+
   defp deps do
     # styler:sort
     [
       {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
-      {:decimal, "~> 3.0", only: [:dev, :test], override: true},
+      {:decimal, "~> 3.1", only: [:dev, :test], override: true},
       {:dialyxir, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:doctest_formatter, "~> 0.4.1", only: [:dev, :test], runtime: false},
       {:doctor, "~> 0.22.0", only: [:dev, :test], runtime: false},
