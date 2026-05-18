@@ -25,35 +25,21 @@ defmodule Crux.Formula.Tseitin do
   alias Crux.Expression
   alias Crux.Formula
 
-  @typedoc """
-  Output of the Tseitin transformation.
-
-  * `:cnf` — every clause: the root assertion plus all auxiliary
-    definition clauses.
-  * `:definitions` — only the auxiliary definition clauses. Consumers
-    that want to negate the formula (for implication tests) must keep
-    these clauses required; auxiliaries are not freely assignable.
-  * `:bindings` / `:reverse_bindings` — only the user-supplied
-    variables, never auxiliaries.
-  * `:auxiliaries` — the set of integer ids that name auxiliary
-    variables.
-  """
-  @type result(variable) :: %{
-          cnf: Formula.cnf(),
-          definitions: [Formula.clause()],
-          bindings: Formula.bindings(variable),
-          reverse_bindings: Formula.reverse_bindings(variable),
-          auxiliaries: MapSet.t(pos_integer())
-        }
-
   @doc """
   Tseitin-encodes `expression` into CNF.
 
   Assumes `expression` is neither the literal `true` nor `false` —
   callers should short-circuit those at a higher level. Booleans nested
   inside the expression are handled.
+
+  The returned `Formula` separates the auxiliary definition clauses
+  (`:definitions`) from the full CNF (`:cnf`). Consumers that want to
+  negate the formula (for implication tests) must keep the definition
+  clauses required; auxiliaries are not freely assignable. `:bindings`
+  and `:reverse_bindings` only cover user-supplied variables, never
+  auxiliaries; the auxiliary ids live in `:auxiliaries`.
   """
-  @spec transform(Expression.t(variable)) :: result(variable) when variable: term()
+  @spec transform(Expression.t(variable)) :: Formula.t(variable) when variable: term()
   def transform(expression) do
     state = %{
       bindings: %{},
@@ -69,7 +55,7 @@ defmodule Crux.Formula.Tseitin do
     definitions = Enum.reverse(state.definitions)
     cnf = [assertion | definitions]
 
-    %{
+    %Formula{
       cnf: cnf,
       definitions: definitions,
       bindings: state.bindings,

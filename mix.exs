@@ -21,7 +21,6 @@ defmodule Crux.MixProject do
       start_permanent: Mix.env() == :prod,
       package: package(),
       deps: deps(),
-      aliases: aliases(),
       docs: &docs/0,
       description: @description,
       source_url: "https://github.com/ash-project/crux",
@@ -59,12 +58,6 @@ defmodule Crux.MixProject do
         "Forum" => "https://elixirforum.com/c/elixir-framework-forums/ash-framework-forum",
         "REUSE Compliance" => "https://api.reuse.software/info/github.com/ash-project/crux"
       }
-    ]
-  end
-
-  defp aliases do
-    [
-      credo: "credo --strict"
     ]
   end
 

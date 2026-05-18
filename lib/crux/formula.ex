@@ -168,21 +168,7 @@ defmodule Crux.Formula do
         @simple_false
 
       expression ->
-        %{
-          cnf: cnf,
-          definitions: definitions,
-          bindings: bindings,
-          reverse_bindings: reverse_bindings,
-          auxiliaries: auxiliaries
-        } = Tseitin.transform(expression)
-
-        %__MODULE__{
-          cnf: cnf,
-          bindings: bindings,
-          reverse_bindings: reverse_bindings,
-          definitions: definitions,
-          auxiliaries: auxiliaries
-        }
+        Tseitin.transform(expression)
     end
   end
 
