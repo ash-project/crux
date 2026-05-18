@@ -10,6 +10,19 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.1.3](https://github.com/ash-project/crux/compare/v0.1.2...v0.1.3) (2026-05-18)
+
+
+
+
+### Bug Fixes:
+
+* exactly_one/1 produces wrong results for N > 2 variables (#26) by [@matt-beanland](https://github.com/matt-beanland) [(#26)](https://github.com/ash-project/crux/pull/26)
+
+### Improvements:
+
+* apply tseitin transformation to CNF conversion (#28) by [@zachdaniel](https://github.com/zachdaniel) [(#28)](https://github.com/ash-project/crux/pull/28)
+
 ## [v0.1.2](https://github.com/ash-project/crux/compare/v0.1.1...v0.1.2) (2025-10-18)
 
 
