@@ -65,7 +65,7 @@ defmodule Crux.MixProject do
     # styler:sort
     [
       {:credo, ">= 0.0.0", only: [:dev, :test], runtime: false},
-      {:decimal, "~> 3.0", only: [:dev, :test], override: true},
+      {:decimal, "~> 3.1", only: [:dev, :test], override: true},
       {:dialyxir, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:doctest_formatter, "~> 0.4.1", only: [:dev, :test], runtime: false},
       {:doctor, "~> 0.22.0", only: [:dev, :test], runtime: false},
