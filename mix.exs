@@ -68,7 +68,7 @@ defmodule Crux.MixProject do
       {:decimal, "~> 3.1", only: [:dev, :test], override: true},
       {:dialyxir, ">= 0.0.0", only: [:dev, :test], runtime: false},
       {:doctest_formatter, "~> 0.4.1", only: [:dev, :test], runtime: false},
-      {:doctor, "~> 0.22.0", only: [:dev, :test], runtime: false},
+      {:doctor, "~> 0.23.0", only: [:dev, :test], runtime: false},
       {:ex_check, "~> 0.12", only: [:dev, :test]},
       {:ex_doc, "~> 0.37", only: [:dev, :test], runtime: false},
       {:git_ops, "~> 2.5", only: [:dev, :test]},
