@@ -51,8 +51,11 @@ defmodule Crux do
            gadget_clauses: [Formula.clause()]
          }
 
-  @simple_true Formula.simple_true()
-  @simple_false Formula.simple_false()
+  # The canonical true/false formulas (`Formula.simple_true/0` and
+  # `Formula.simple_false/0`) are recognized structurally rather than by
+  # matching a compile-time copy of the struct: that copy would embed its
+  # `MapSet` as a literal, whose structural type loses `MapSet.t()`'s
+  # opaqueness and trips Dialyzer's opaque checks (OTP 28+).
 
   @doc """
   Solves a SAT formula and returns a satisfying assignment.
@@ -74,8 +77,10 @@ defmodule Crux do
   @spec solve(Formula.t(variable)) :: {:ok, %{variable => boolean()}} | {:error, :unsatisfiable}
         when variable: term()
   def solve(formula)
-  def solve(@simple_true), do: {:ok, %{}}
-  def solve(@simple_false), do: {:error, :unsatisfiable}
+
+  def solve(%Formula{cnf: [], bindings: bindings}) when map_size(bindings) == 0, do: {:ok, %{}}
+
+  def solve(%Formula{cnf: [[1], [-1]], bindings: %{1 => false}}), do: {:error, :unsatisfiable}
 
   def solve(%Formula{cnf: cnf, bindings: bindings}) do
     case Crux.Implementation.solve_expression(cnf) do
@@ -100,8 +105,10 @@ defmodule Crux do
   """
   @spec satisfiable?(Formula.t()) :: boolean()
   def satisfiable?(formula)
-  def satisfiable?(@simple_true), do: true
-  def satisfiable?(@simple_false), do: false
+
+  def satisfiable?(%Formula{cnf: [], bindings: bindings}) when map_size(bindings) == 0, do: true
+
+  def satisfiable?(%Formula{cnf: [[1], [-1]], bindings: %{1 => false}}), do: false
 
   def satisfiable?(%Formula{cnf: cnf}) do
     case Crux.Implementation.solve_expression(cnf) do
@@ -146,8 +153,11 @@ defmodule Crux do
   @spec decision_tree(Formula.t(variable), opts(variable)) :: tree(variable)
         when variable: term()
   def decision_tree(formula, opts \\ [])
-  def decision_tree(@simple_true, _opts), do: true
-  def decision_tree(@simple_false, _opts), do: false
+
+  def decision_tree(%Formula{cnf: [], bindings: bindings}, _opts) when map_size(bindings) == 0,
+    do: true
+
+  def decision_tree(%Formula{cnf: [[1], [-1]], bindings: %{1 => false}}, _opts), do: false
 
   def decision_tree(formula, opts) do
     sorter = Keyword.get(opts, :sorter, &<=/2)
@@ -190,8 +200,12 @@ defmodule Crux do
   @spec satisfying_scenarios(Formula.t(variable), opts(variable)) :: [%{variable => boolean()}]
         when variable: term()
   def satisfying_scenarios(formula, opts \\ [])
-  def satisfying_scenarios(@simple_true, _opts), do: [%{}]
-  def satisfying_scenarios(@simple_false, _opts), do: []
+
+  def satisfying_scenarios(%Formula{cnf: [], bindings: bindings}, _opts)
+      when map_size(bindings) == 0,
+      do: [%{}]
+
+  def satisfying_scenarios(%Formula{cnf: [[1], [-1]], bindings: %{1 => false}}, _opts), do: []
 
   def satisfying_scenarios(formula, opts) do
     original_cnf = formula.cnf

@@ -25,6 +25,14 @@ defmodule Crux.Formula.Tseitin do
   alias Crux.Expression
   alias Crux.Formula
 
+  @typep state(variable) :: %{
+           bindings: Formula.bindings(variable),
+           reverse_bindings: Formula.reverse_bindings(variable),
+           auxiliaries: Formula.auxiliaries(),
+           definitions: [Formula.clause()],
+           next_id: pos_integer()
+         }
+
   @doc """
   Tseitin-encodes `expression` into CNF.
 
@@ -44,7 +52,7 @@ defmodule Crux.Formula.Tseitin do
     state = %{
       bindings: %{},
       reverse_bindings: %{},
-      auxiliaries: MapSet.new(),
+      auxiliaries: Formula.empty_auxiliaries(),
       definitions: [],
       next_id: 1
     }
@@ -64,7 +72,8 @@ defmodule Crux.Formula.Tseitin do
     }
   end
 
-  @spec encode(Expression.t(variable), map()) :: {Formula.literal(), map()} when variable: term()
+  @spec encode(Expression.t(variable), state(variable)) :: {Formula.literal(), state(variable)}
+        when variable: term()
   defp encode(true, state) do
     {aux, state} = fresh_aux(state)
     {aux, add_definitions(state, [[aux]])}
@@ -128,19 +137,20 @@ defmodule Crux.Formula.Tseitin do
     end
   end
 
-  @spec next_id(map()) :: {pos_integer(), map()}
+  @spec next_id(state(variable)) :: {pos_integer(), state(variable)} when variable: term()
   defp next_id(state) do
     id = state.next_id
     {id, %{state | next_id: id + 1}}
   end
 
-  @spec fresh_aux(map()) :: {pos_integer(), map()}
+  @spec fresh_aux(state(variable)) :: {pos_integer(), state(variable)} when variable: term()
   defp fresh_aux(state) do
     {id, state} = next_id(state)
     {id, %{state | auxiliaries: MapSet.put(state.auxiliaries, id)}}
   end
 
-  @spec add_definitions(map(), [Formula.clause()]) :: map()
+  @spec add_definitions(state(variable), [Formula.clause()]) :: state(variable)
+        when variable: term()
   defp add_definitions(state, clauses) do
     %{state | definitions: Enum.reverse(clauses, state.definitions)}
   end

@@ -105,23 +105,6 @@ defmodule Crux.Formula do
     auxiliaries: MapSet.new()
   ]
 
-  @simple_true %{
-    __struct__: __MODULE__,
-    cnf: [],
-    bindings: %{},
-    reverse_bindings: %{},
-    definitions: [],
-    auxiliaries: MapSet.new()
-  }
-  @simple_false %{
-    __struct__: __MODULE__,
-    cnf: [[1], [-1]],
-    bindings: %{1 => false},
-    reverse_bindings: %{false => 1},
-    definitions: [],
-    auxiliaries: MapSet.new()
-  }
-
   @doc """
   Converts a boolean expression to a SAT formula in Conjunctive Normal Form (CNF).
 
@@ -162,10 +145,10 @@ defmodule Crux.Formula do
 
     case simplified do
       true ->
-        @simple_true
+        simple_true()
 
       false ->
-        @simple_false
+        simple_false()
 
       expression ->
         Tseitin.transform(expression)
@@ -204,8 +187,8 @@ defmodule Crux.Formula do
   """
   @spec to_expression(formula :: t(variable)) :: Expression.t(variable) when variable: term()
   def to_expression(formula)
-  def to_expression(@simple_true), do: true
-  def to_expression(@simple_false), do: false
+  def to_expression(%__MODULE__{cnf: []}), do: true
+  def to_expression(%__MODULE__{cnf: [[1], [-1]], bindings: %{1 => false}}), do: false
 
   def to_expression(%__MODULE__{
         cnf: cnf,
@@ -352,11 +335,40 @@ defmodule Crux.Formula do
 
   @doc false
   @spec simple_true() :: t()
-  def simple_true, do: @simple_true
+  def simple_true do
+    %__MODULE__{
+      cnf: [],
+      bindings: %{},
+      reverse_bindings: %{},
+      definitions: [],
+      auxiliaries: empty_auxiliaries()
+    }
+  end
 
   @doc false
   @spec simple_false() :: t()
-  def simple_false, do: @simple_false
+  def simple_false do
+    %__MODULE__{
+      cnf: [[1], [-1]],
+      bindings: %{1 => false},
+      reverse_bindings: %{false => 1},
+      definitions: [],
+      auxiliaries: empty_auxiliaries()
+    }
+  end
+
+  # On Elixir < 1.19, `MapSet.new/0` (and `new/1` with a literal argument) is
+  # inlined by the compiler into a bare `%MapSet{}` literal, whose structural
+  # type loses `MapSet.t()`'s opaqueness and trips Dialyzer's opaque checks
+  # under OTP 28 in any downstream code that receives it (elixir-lang/elixir
+  # #14576). The variable argument prevents that inlining, so the runtime
+  # `MapSet.new/1` call keeps the opaque type sealed.
+  @doc false
+  @spec empty_auxiliaries() :: auxiliaries()
+  def empty_auxiliaries do
+    none = []
+    MapSet.new(none)
+  end
 
   @spec clause_to_expression(clause(), bindings(variable)) :: Expression.t(variable)
         when variable: term()
