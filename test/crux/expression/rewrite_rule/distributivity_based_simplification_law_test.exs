@@ -9,6 +9,7 @@ defmodule Crux.Expression.RewriteRule.DistributivityBasedSimplificationLawTest d
   import Crux.Expression, only: [b: 1]
 
   alias Crux.Expression
+  alias Crux.Expression.RewriteRule
   alias Crux.Expression.RewriteRule.DistributivityBasedSimplificationLaw
 
   doctest DistributivityBasedSimplificationLaw, import: true
@@ -205,12 +206,27 @@ defmodule Crux.Expression.RewriteRule.DistributivityBasedSimplificationLawTest d
       result = Expression.postwalk(expr, &DistributivityBasedSimplificationLaw.walk/1)
       assert result == b(:a or (:b or :c))
     end
+
+    test "reaches a fixpoint when a rewrite re-triggers its own pattern" do
+      exprs_and_expected = [
+        {b(:a and (not :a or (not :a or :b))), b(:a and :b)},
+        {b(:a or (not :a and (not :a and :b))), b(:a or :b)},
+        {b(not :a and (:a or (:a or :b))), b(not :a and :b)},
+        {b(not :a or (:a and (:a and :b))), b(not :a or :b)}
+      ]
+
+      for {expr, expected} <- exprs_and_expected do
+        {result, _acc_map} = RewriteRule.apply(expr, [DistributivityBasedSimplificationLaw])
+        assert result == expected
+      end
+    end
   end
 
-  property "applying distributivity-based simplification law is idempotent" do
+  property "applying distributivity-based simplification law is idempotent after stabilization" do
     check all(expr <- Expression.generate_expression(StreamData.atom(:alphanumeric))) do
-      result1 = Expression.postwalk(expr, &DistributivityBasedSimplificationLaw.walk/1)
-      result2 = Expression.postwalk(result1, &DistributivityBasedSimplificationLaw.walk/1)
+      {result1, _acc_map1} = RewriteRule.apply(expr, [DistributivityBasedSimplificationLaw])
+      {result2, _acc_map2} = RewriteRule.apply(result1, [DistributivityBasedSimplificationLaw])
+
       assert result1 == result2
     end
   end
