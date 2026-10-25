@@ -4,6 +4,8 @@
 
 [
   tools: [
-    {:reuse, command: ["pipx", "run", "reuse", "lint", "-q"]}
+    {:reuse, command: ["pipx", "run", "reuse", "lint", "-q"]},
+    # usage_rules is a dev dependency, but nothing is synced from it
+    {:usage_rules, false}
   ]
 ]
