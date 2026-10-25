@@ -10,6 +10,15 @@ See [Conventional Commits](Https://conventionalcommits.org) for commit guideline
 
 <!-- changelog -->
 
+## [v0.1.5](https://github.com/ash-project/crux/compare/v0.1.4...v0.1.5) (2026-10-25)
+
+
+
+
+### Bug Fixes:
+
+* `DistributivityBasedSimplificationLaw` doesn't reach a fixpoint (#39) by [@jimsynz](https://github.com/jimsynz) [(#39)](https://github.com/ash-project/crux/pull/39)
+
 ## [v0.1.4](https://github.com/ash-project/crux/compare/v0.1.3...v0.1.4) (2026-07-02)
 
 
