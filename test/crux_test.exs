@@ -481,6 +481,54 @@ defmodule CruxTest do
       assert {:error, :unsatisfiable} = Crux.validate_assignments(assignments, opts)
     end
 
+    test "reverse implication: drops implied variable kept earlier" do
+      # b implies a; a sorts before b, so a=true is already kept when
+      # b=true arrives — a is redundant and must be dropped
+      assignments = [a: true, b: true]
+
+      opts = [
+        implies?: fn
+          :b, :a -> true
+          _, _ -> false
+        end
+      ]
+
+      assert {:ok, [b: true]} = Crux.validate_assignments(assignments, opts)
+    end
+
+    test "mutual implication keeps exactly one variable" do
+      # a implies b and b implies a: the result must keep exactly one of them
+      assignments = [a: true, b: true]
+
+      opts = [
+        implies?: fn
+          :a, :b -> true
+          :b, :a -> true
+          _, _ -> false
+        end
+      ]
+
+      assert {:ok, [a: true]} = Crux.validate_assignments(assignments, opts)
+    end
+
+    test "reverse implication redundancy is order-independent" do
+      # Same domain knowledge as the forward case, reversed sort order:
+      # both orders keep only the implying variable
+      assignments = [a: true, b: true]
+
+      opts = [
+        implies?: fn
+          :a, :b -> true
+          _, _ -> false
+        end
+      ]
+
+      assert {:ok, [a: true]} = Crux.validate_assignments(assignments, opts)
+
+      reversed_opts = Keyword.put(opts, :sorter, &>=/2)
+      assert {:ok, [a: true]} = Crux.validate_assignments(assignments, reversed_opts)
+    end
+
     test "reverse implication conflict is order-independent" do
       # a implies b; with a reversed sorter, b=false is kept before a=true
       # arrives — a=true forces b=true, which conflicts with b=false

@@ -192,7 +192,8 @@ defmodule Crux do
     variables conflict when both are true. Used to filter out impossible scenarios.
     Defaults to `fn _, _ -> false end`.
   - `:implies?` - A function `(variable, variable -> boolean())` where `implies?.(x, y)` returns
-    true if x being true forces y to be true. Used to minimize scenarios.
+    true if x being true forces y to be true. Used to minimize scenarios; implications are
+    checked in both directions, so results do not depend on variable ordering.
     Defaults to `fn _, _ -> false end`.
 
   `conflicts?` and `implies?` only apply to variables assigned true; false assignments never
@@ -238,15 +239,16 @@ defmodule Crux do
 
   Takes an enumerable of `{variable, boolean()}` pairs and validates them using
   the provided conflict and implication callbacks. Variables are processed in
-  sorted order. Implication conflicts are detected in both directions, so
-  whether the assignments are valid does not depend on the sort order.
+  sorted order, but implications are checked in both directions, so the result
+  does not depend on the sort order.
 
   `implies?.(x, y)` means "x true forces y true". `conflicts?` and `implies?`
   only apply to variables assigned true: a false assignment never triggers
   `conflicts?`, and only conflicts with an implication when a true variable
   forces it to be true.
 
-  Returns `{:ok, filtered_assignments}` if all assignments are valid, or
+  Returns `{:ok, filtered_assignments}` with implied true variables removed
+  (for mutually implying variables, exactly one is kept), or
   `{:error, :unsatisfiable}` if any conflicts are detected.
 
   ## Parameters
@@ -286,20 +288,45 @@ defmodule Crux do
         when variable: term()
   def validate_assignments(assignments, opts \\ []) do
     sorter = Keyword.get(opts, :sorter, &<=/2)
+    implies? = Keyword.get(opts, :implies?, fn _, _ -> false end)
 
     assignments
     |> Enum.sort_by(&elem(&1, 0), sorter)
     |> Enum.reduce_while({:ok, []}, fn {variable, value} = assignment, {:ok, acc} ->
       case validate_assignment(acc, assignment, opts) do
-        :implied -> {:cont, {:ok, acc}}
-        :conflict -> {:halt, {:error, :unsatisfiable}}
-        :ok -> {:cont, {:ok, [{variable, value} | acc]}}
+        :implied ->
+          {:cont, {:ok, acc}}
+
+        :conflict ->
+          {:halt, {:error, :unsatisfiable}}
+
+        :ok ->
+          acc = if value, do: drop_implied_by(acc, variable, implies?), else: acc
+          {:cont, {:ok, [{variable, value} | acc]}}
       end
     end)
     |> case do
       {:ok, filtered_assignments} -> {:ok, Enum.reverse(filtered_assignments)}
       error -> error
     end
+  end
+
+  # Drops kept true assignments that `variable` (newly kept, assigned true)
+  # implies, so the result stays minimal regardless of sort order. Mutual
+  # implication never drops both variables: `validate_assignment/3` already
+  # returned :implied for the later variable, so this function never runs
+  # for it.
+  @spec drop_implied_by(
+          [{variable, boolean()}],
+          variable,
+          (variable, variable -> boolean())
+        ) :: [{variable, boolean()}]
+        when variable: term()
+  defp drop_implied_by(kept_assignments, variable, implies?) do
+    Enum.reject(kept_assignments, fn
+      {kept_var, true} -> implies?.(variable, kept_var)
+      _ -> false
+    end)
   end
 
   @spec enumerate_dimacs_scenarios(Formula.t(variable), Formula.cnf(), negation_encoding(), [
