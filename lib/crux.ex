@@ -37,8 +37,12 @@ defmodule Crux do
   Options for decision tree and scenario generation functions.
 
   - `:sorter` - A comparison function for variable ordering
-  - `:conflicts?` - A function that returns true if two variables conflict
-  - `:implies?` - A function that returns true if the first variable implies the second
+  - `:conflicts?` - A function that returns true if two variables conflict when both are true
+  - `:implies?` - A function where `implies?.(x, y)` returns true if x being true forces y to
+    be true
+
+  `conflicts?` and `implies?` only apply to variables assigned true; false assignments never
+  trigger `conflicts?`.
   """
   @type opts(variable) :: [
           {:sorter, (variable, variable -> boolean())}
@@ -134,10 +138,15 @@ defmodule Crux do
   - `:sorter` - A comparison function `(variable, variable -> boolean())` for variable ordering.
     Defaults to `&<=/2`.
   - `:conflicts?` - A function `(variable, variable -> boolean())` that returns true if the two
-    variables conflict with each other. Used to detect when variables are mutually exclusive.
+    variables conflict when both are true. Used to detect when variables are mutually exclusive.
     Defaults to `fn _, _ -> false end`.
-  - `:implies?` - A function `(variable, variable -> boolean())` that returns true if the first
-    variable implies the value of the second variable. Defaults to `fn _, _ -> false end`.
+  - `:implies?` - A function `(variable, variable -> boolean())` where `implies?.(x, y)` returns
+    true if x being true forces y to be true. Implications are checked in both directions along
+    each path, so results do not depend on variable ordering.
+    Defaults to `fn _, _ -> false end`.
+
+  `conflicts?` and `implies?` only apply to variables assigned true; false assignments never
+  trigger `conflicts?`.
 
   ## Examples
 
@@ -180,11 +189,15 @@ defmodule Crux do
   ## Options
 
   - `:conflicts?` - A function `(variable, variable -> boolean())` that returns true if the two
-    variables conflict with each other. Used to filter out impossible scenarios.
+    variables conflict when both are true. Used to filter out impossible scenarios.
     Defaults to `fn _, _ -> false end`.
-  - `:implies?` - A function `(variable, variable -> boolean())` that returns true if the first
-    variable implies the value of the second variable. Used to minimize scenarios.
+  - `:implies?` - A function `(variable, variable -> boolean())` where `implies?.(x, y)` returns
+    true if x being true forces y to be true. Used to minimize scenarios; implications are
+    checked in both directions, so results do not depend on variable ordering.
     Defaults to `fn _, _ -> false end`.
+
+  `conflicts?` and `implies?` only apply to variables assigned true; false assignments never
+  trigger `conflicts?`.
 
   ## Examples
 
@@ -226,9 +239,16 @@ defmodule Crux do
 
   Takes an enumerable of `{variable, boolean()}` pairs and validates them using
   the provided conflict and implication callbacks. Variables are processed in
-  sorted order.
+  sorted order, but implications are checked in both directions, so the result
+  does not depend on the sort order.
 
-  Returns `{:ok, filtered_assignments}` if all assignments are valid, or
+  `implies?.(x, y)` means "x true forces y true". `conflicts?` and `implies?`
+  only apply to variables assigned true: a false assignment never triggers
+  `conflicts?`, and only conflicts with an implication when a true variable
+  forces it to be true.
+
+  Returns `{:ok, filtered_assignments}` with implied true variables removed
+  (for mutually implying variables, exactly one is kept), or
   `{:error, :unsatisfiable}` if any conflicts are detected.
 
   ## Parameters
@@ -250,26 +270,63 @@ defmodule Crux do
       ...> Crux.validate_assignments(assignments, opts)
       {:ok, [a: true]}
 
+      iex> assignments = [a: false, b: true]
+      ...>
+      ...> opts = [
+      ...>   implies?: fn
+      ...>     :b, :a -> true
+      ...>     _, _ -> false
+      ...>   end
+      ...> ]
+      ...>
+      ...> Crux.validate_assignments(assignments, opts)
+      {:error, :unsatisfiable}
+
   """
   @spec validate_assignments(Enumerable.t({variable, boolean()}), opts(variable)) ::
           {:ok, [{variable, boolean()}]} | {:error, :unsatisfiable}
         when variable: term()
   def validate_assignments(assignments, opts \\ []) do
     sorter = Keyword.get(opts, :sorter, &<=/2)
+    implies? = Keyword.get(opts, :implies?, fn _, _ -> false end)
 
     assignments
     |> Enum.sort_by(&elem(&1, 0), sorter)
     |> Enum.reduce_while({:ok, []}, fn {variable, value} = assignment, {:ok, acc} ->
       case validate_assignment(acc, assignment, opts) do
-        :implied -> {:cont, {:ok, acc}}
-        :conflict -> {:halt, {:error, :unsatisfiable}}
-        :ok -> {:cont, {:ok, [{variable, value} | acc]}}
+        :implied ->
+          {:cont, {:ok, acc}}
+
+        :conflict ->
+          {:halt, {:error, :unsatisfiable}}
+
+        :ok ->
+          acc = if value, do: drop_implied_by(acc, variable, implies?), else: acc
+          {:cont, {:ok, [{variable, value} | acc]}}
       end
     end)
     |> case do
       {:ok, filtered_assignments} -> {:ok, Enum.reverse(filtered_assignments)}
       error -> error
     end
+  end
+
+  # Drops kept true assignments that `variable` (newly kept, assigned true)
+  # implies, so the result stays minimal regardless of sort order. Mutual
+  # implication never drops both variables: `validate_assignment/3` already
+  # returned :implied for the later variable, so this function never runs
+  # for it.
+  @spec drop_implied_by(
+          [{variable, boolean()}],
+          variable,
+          (variable, variable -> boolean())
+        ) :: [{variable, boolean()}]
+        when variable: term()
+  defp drop_implied_by(kept_assignments, variable, implies?) do
+    Enum.reject(kept_assignments, fn
+      {kept_var, true} -> implies?.(variable, kept_var)
+      _ -> false
+    end)
   end
 
   @spec enumerate_dimacs_scenarios(Formula.t(variable), Formula.cnf(), negation_encoding(), [
@@ -531,21 +588,28 @@ defmodule Crux do
     conflicts? = Keyword.get(opts, :conflicts?, fn _, _ -> false end)
     implies? = Keyword.get(opts, :implies?, fn _, _ -> false end)
 
-    # Extract variables that are set to true in existing assignments
+    # Partition existing assignments by value; implications only fire from or
+    # against variables assigned true, conflicts only between true variables.
     true_vars = for {var, true} <- existing_assignments, do: var
+    false_vars = for {var, false} <- existing_assignments, do: var
 
     cond do
-      # Forward implication: Check if any existing true variable implies this variable
+      # Reverse implication conflict: this variable (when true) forces an
+      # existing false variable to be true
+      value and Enum.any?(false_vars, &implies?.(variable, &1)) ->
+        :conflict
+
+      # Forward implication: an existing true variable forces this variable
       value and Enum.any?(true_vars, &implies?.(&1, variable)) ->
         :implied
 
-      # Backward implication conflict: If this variable is false, check if any existing
-      # true variable implies this variable (which would be a conflict)
+      # Backward implication conflict: an existing true variable forces this
+      # variable to be true, but it is assigned false
       not value and Enum.any?(true_vars, &implies?.(&1, variable)) ->
         :conflict
 
-      # Direct conflict: Check if this variable (when true) conflicts with existing assignments
-      # (check both directions for user convenience)
+      # Direct conflict: this variable (when true) conflicts with an existing
+      # true variable (checked in both directions for user convenience)
       value and Enum.any?(true_vars, &(conflicts?.(&1, variable) or conflicts?.(variable, &1))) ->
         :conflict
 
