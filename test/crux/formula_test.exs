@@ -29,12 +29,15 @@ defmodule Crux.FormulaTest do
              |> Enum.all?(&(not MapSet.member?(formula.auxiliaries, &1)))
 
       # The encoded CNF is satisfiability-equivalent to the source.
-      assert Crux.satisfying_scenarios(formula) ==
-               Crux.satisfying_scenarios(%Formula{
-                 cnf: [[1, 2], [-3, 2], [1, -4], [-3, -4]],
-                 bindings: %{1 => :a, 2 => :d, 3 => :b, 4 => :c},
-                 reverse_bindings: %{a: 1, d: 2, b: 3, c: 4}
-               })
+      # Sort both sides: scenario order depends on the SAT solver backend.
+      assert Enum.sort(Crux.satisfying_scenarios(formula)) ==
+               Enum.sort(
+                 Crux.satisfying_scenarios(%Formula{
+                   cnf: [[1, 2], [-3, 2], [1, -4], [-3, -4]],
+                   bindings: %{1 => :a, 2 => :d, 3 => :b, 4 => :c},
+                   reverse_bindings: %{a: 1, d: 2, b: 3, c: 4}
+                 })
+               )
     end
 
     test "stays linear on the historical exponential-blowup pattern (issue #23)" do
