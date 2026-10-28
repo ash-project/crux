@@ -465,6 +465,37 @@ defmodule CruxTest do
       # b should be filtered out because a implies it
       assert {:ok, [a: true]} = Crux.validate_assignments(assignments, opts)
     end
+
+    test "reverse implication: detects conflict when implier sorts after implied" do
+      # b implies a; a sorts before b, so a=false is already kept when
+      # b=true arrives — b=true forces a=true, which conflicts with a=false
+      assignments = [a: false, b: true]
+
+      opts = [
+        implies?: fn
+          :b, :a -> true
+          _, _ -> false
+        end
+      ]
+
+      assert {:error, :unsatisfiable} = Crux.validate_assignments(assignments, opts)
+    end
+
+    test "reverse implication conflict is order-independent" do
+      # a implies b; with a reversed sorter, b=false is kept before a=true
+      # arrives — a=true forces b=true, which conflicts with b=false
+      assignments = [b: false, a: true]
+
+      opts = [
+        sorter: &>=/2,
+        implies?: fn
+          :a, :b -> true
+          _, _ -> false
+        end
+      ]
+
+      assert {:error, :unsatisfiable} = Crux.validate_assignments(assignments, opts)
+    end
   end
 
   # Helper functions for property tests
