@@ -150,6 +150,22 @@ defmodule Crux.FormulaTest do
       assert result =~ ~r/^p cnf #{expected_vars} #{length(formula.cnf)}\n/
     end
 
+    test "the DIMACS header reports the highest variable id for sparse ids" do
+      formula = %Formula{
+        cnf: [[5, -7]],
+        bindings: %{5 => :a, 7 => :b},
+        reverse_bindings: %{a: 5, b: 7},
+        definitions: [],
+        auxiliaries: MapSet.new()
+      }
+
+      assert Formula.to_picosat(formula) == "p cnf 7 1\n5 -7 0"
+    end
+
+    test "an empty CNF renders a zero-variable, zero-clause header" do
+      assert Formula.to_picosat(Formula.simple_true()) == "p cnf 0 0\n"
+    end
+
     test "every clause is rendered as space-separated literals terminated by 0" do
       formula = Formula.from_expression(b((:a and :b) or :c))
       result = Formula.to_picosat(formula)

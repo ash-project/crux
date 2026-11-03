@@ -309,8 +309,8 @@ defmodule Crux.Formula do
   Takes a formula struct and returns a string in the DIMACS CNF format
   that can be consumed by SAT solvers like PicoSAT.
 
-  The header reports the highest variable id used in the CNF, which
-  includes Tseitin auxiliary variables.
+  The header reports the highest variable id used in the CNF, covering
+  both bound variables and Tseitin auxiliary variables.
 
   ## Examples
 
@@ -321,8 +321,8 @@ defmodule Crux.Formula do
 
   """
   @spec to_picosat(t()) :: String.t()
-  def to_picosat(%__MODULE__{cnf: clauses, bindings: bindings, auxiliaries: auxiliaries}) do
-    variable_count = map_size(bindings) + MapSet.size(auxiliaries)
+  def to_picosat(%__MODULE__{cnf: clauses}) do
+    variable_count = max_variable_id(clauses)
     clause_count = length(clauses)
 
     formatted_input =
@@ -331,6 +331,17 @@ defmodule Crux.Formula do
       end)
 
     "p cnf #{variable_count} #{clause_count}\n" <> formatted_input
+  end
+
+  # Returns the highest variable id referenced by any literal, or 0 for an
+  # empty CNF.
+  @doc false
+  @spec max_variable_id(cnf()) :: non_neg_integer()
+  def max_variable_id(cnf) do
+    cnf
+    |> List.flatten()
+    |> Enum.map(&abs/1)
+    |> then(&Enum.max([0 | &1]))
   end
 
   @doc false

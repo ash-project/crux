@@ -379,8 +379,7 @@ defmodule Crux do
           Enum.reject(cnf, &MapSet.member?(definition_set, &1))
       end
 
-    variables = cnf |> List.flatten() |> Enum.map(&abs/1)
-    max_variable_id = Enum.max([0 | variables])
+    max_variable_id = Formula.max_variable_id(cnf)
     clause_count = length(assertions)
 
     first_selector = max_variable_id + 1
