@@ -20,7 +20,7 @@ defmodule Crux.Expression.RewriteRule.IdempotentLaw do
   use Crux.Expression.RewriteRule
 
   @impl Crux.Expression.RewriteRule
-  def walk({op, left, right}) do
+  def walk({op, left, right}) when op in [:and, :or] do
     list =
       left
       |> gather(op)

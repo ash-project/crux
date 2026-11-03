@@ -84,6 +84,15 @@ defmodule Crux.Expression.RewriteRule.IdempotentLawTest do
       assert Expression.postwalk(:a, &IdempotentLaw.walk/1) == :a
     end
 
+    test "leaves 3-tuples not tagged :and or :or unchanged" do
+      assert Expression.postwalk({:eq, :x, :x}, &IdempotentLaw.walk/1) == {:eq, :x, :x}
+
+      assert Expression.postwalk(b({:eq, :x, :x} and {:eq, :x, :x}), &IdempotentLaw.walk/1) ==
+               {:eq, :x, :x}
+
+      assert Expression.simplify(b({:eq, :x, :x} and :y)) == b({:eq, :x, :x} and :y)
+    end
+
     test "leaves negations unchanged" do
       assert Expression.postwalk(b(not :a), &IdempotentLaw.walk/1) == b(not :a)
     end
