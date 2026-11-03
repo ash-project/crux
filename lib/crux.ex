@@ -43,6 +43,11 @@ defmodule Crux do
           | {:implies?, (variable, variable -> boolean())}
         ]
 
+  @typep callbacks(variable) :: %{
+           conflicts?: (variable, variable -> boolean()),
+           implies?: (variable, variable -> boolean())
+         }
+
   @typep negation_encoding :: %{
            selectors: [Formula.literal()],
            gadget_clauses: [Formula.clause()]
@@ -160,7 +165,7 @@ defmodule Crux do
     sorter = Keyword.get(opts, :sorter, &<=/2)
     variables = formula.bindings |> Map.values() |> Enum.sort(sorter)
     scenarios = satisfying_scenarios(formula, opts)
-    build_decision_tree(variables, [], scenarios, opts)
+    build_decision_tree(variables, [], scenarios, callbacks(opts))
   end
 
   @doc """
@@ -254,12 +259,12 @@ defmodule Crux do
         when variable: term()
   def validate_assignments(assignments, opts \\ []) do
     sorter = Keyword.get(opts, :sorter, &<=/2)
-    implies? = Keyword.get(opts, :implies?, fn _, _ -> false end)
+    callbacks = callbacks(opts)
 
     assignments
     |> Enum.sort_by(&elem(&1, 0), sorter)
     |> Enum.reduce_while({:ok, []}, fn {variable, value} = assignment, {:ok, acc} ->
-      case validate_assignment(acc, assignment, opts) do
+      case validate_assignment(split_by_value(acc), assignment, callbacks) do
         :implied ->
           {:cont, {:ok, acc}}
 
@@ -267,7 +272,7 @@ defmodule Crux do
           {:halt, {:error, :unsatisfiable}}
 
         :ok ->
-          acc = if value, do: drop_implied_by(acc, variable, implies?), else: acc
+          acc = if value, do: drop_implied_by(acc, variable, callbacks.implies?), else: acc
           {:cont, {:ok, [{variable, value} | acc]}}
       end
     end)
@@ -451,12 +456,12 @@ defmodule Crux do
           [variable],
           [{variable, boolean()}],
           [%{variable => boolean()}],
-          opts(variable)
+          callbacks(variable)
         ) :: tree(variable)
         when variable: term()
-  defp build_decision_tree(_vars, _path, [], _opts), do: false
+  defp build_decision_tree(_vars, _path, [], _callbacks), do: false
 
-  defp build_decision_tree(vars, path, scenarios, opts) do
+  defp build_decision_tree(vars, path, scenarios, callbacks) do
     if Enum.any?(scenarios, &covered_by_path?(&1, path)) do
       true
     else
@@ -465,21 +470,34 @@ defmodule Crux do
           true
 
         [variable | rest] ->
-          case branch_shortcuts_with_validate(variable, path, opts) do
+          case branch_shortcuts_with_validate(variable, path, callbacks) do
             :force_true ->
               right_scenarios = filter_and_strip(scenarios, variable, true)
-              build_decision_tree(rest, [{variable, true} | path], right_scenarios, opts)
+              build_decision_tree(rest, [{variable, true} | path], right_scenarios, callbacks)
 
             :force_false ->
               left_scenarios = filter_and_strip(scenarios, variable, false)
-              build_decision_tree(rest, [{variable, false} | path], left_scenarios, opts)
+              build_decision_tree(rest, [{variable, false} | path], left_scenarios, callbacks)
 
             :both ->
               left_scenarios = filter_and_strip(scenarios, variable, false)
               right_scenarios = filter_and_strip(scenarios, variable, true)
 
-              left = build_decision_tree(rest, [{variable, false} | path], left_scenarios, opts)
-              right = build_decision_tree(rest, [{variable, true} | path], right_scenarios, opts)
+              left =
+                build_decision_tree(
+                  rest,
+                  [{variable, false} | path],
+                  left_scenarios,
+                  callbacks
+                )
+
+              right =
+                build_decision_tree(
+                  rest,
+                  [{variable, true} | path],
+                  right_scenarios,
+                  callbacks
+                )
 
               if left == right, do: left, else: {variable, left, right}
 
@@ -492,12 +510,17 @@ defmodule Crux do
 
   # Determines the branching strategy for a variable based on validation results.
   # Uses conflict and implication analysis to skip impossible branches early.
-  @spec branch_shortcuts_with_validate(variable, [{variable, boolean()}], opts(variable)) ::
-          :force_true | :force_false | :both | :unsat
+  @spec branch_shortcuts_with_validate(
+          variable,
+          [{variable, boolean()}],
+          callbacks(variable)
+        ) :: :force_true | :force_false | :both | :unsat
         when variable: term()
-  defp branch_shortcuts_with_validate(variable, path, opts) do
-    case {validate_assignment(path, {variable, false}, opts),
-          validate_assignment(path, {variable, true}, opts)} do
+  defp branch_shortcuts_with_validate(variable, path, callbacks) do
+    split_path = split_by_value(path)
+
+    case {validate_assignment(split_path, {variable, false}, callbacks),
+          validate_assignment(split_path, {variable, true}, callbacks)} do
       {:conflict, :conflict} -> :unsat
       {:conflict, _} -> :force_true
       {_, :implied} -> :force_true
@@ -532,21 +555,35 @@ defmodule Crux do
     Enum.all?(scenario, fn {variable, value} -> Map.get(path_map, variable) == value end)
   end
 
-  # Validates a single variable assignment against existing assignments
+  @spec callbacks(opts(variable)) :: callbacks(variable) when variable: term()
+  defp callbacks(opts) do
+    %{
+      conflicts?: Keyword.get(opts, :conflicts?, fn _, _ -> false end),
+      implies?: Keyword.get(opts, :implies?, fn _, _ -> false end)
+    }
+  end
+
+  # Splits assignments into the variables set to true and those set to false.
+  @spec split_by_value(Enumerable.t({variable, boolean()})) :: {[variable], [variable]}
+        when variable: term()
+  defp split_by_value(assignments) do
+    true_vars = for {var, true} <- assignments, do: var
+    false_vars = for {var, false} <- assignments, do: var
+    {true_vars, false_vars}
+  end
+
+  # Validates a single variable assignment against existing assignments,
+  # given as the result of `split_by_value/1`.
   @spec validate_assignment(
-          Enumerable.t({variable, boolean()}),
+          {[variable], [variable]},
           {variable, boolean()},
-          opts(variable)
+          callbacks(variable)
         ) :: :ok | :conflict | :implied
         when variable: term()
-  defp validate_assignment(existing_assignments, {variable, value}, opts) do
-    conflicts? = Keyword.get(opts, :conflicts?, fn _, _ -> false end)
-    implies? = Keyword.get(opts, :implies?, fn _, _ -> false end)
-
-    # Extract variables that are set to true in existing assignments
-    true_vars = for {var, true} <- existing_assignments, do: var
-    false_vars = for {var, false} <- existing_assignments, do: var
-
+  defp validate_assignment({true_vars, false_vars}, {variable, value}, %{
+         conflicts?: conflicts?,
+         implies?: implies?
+       }) do
     cond do
       # Reverse implication conflict: this variable implies an existing false variable
       value and Enum.any?(false_vars, &implies?.(variable, &1)) ->
