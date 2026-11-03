@@ -742,10 +742,7 @@ defmodule Crux.Expression do
   @spec expand(expression :: t(variable), callback :: (t(variable) -> t(variable))) :: t(variable)
         when variable: term()
   def expand(expression, callback) do
-    {result, _acc} =
-      expression
-      |> simplify()
-      |> expand(nil, fn expr, nil -> {callback.(expr), nil} end)
+    {result, _acc} = expand(expression, nil, fn expr, nil -> {callback.(expr), nil} end)
 
     result
   end
