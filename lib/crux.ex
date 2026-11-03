@@ -137,7 +137,7 @@ defmodule Crux do
     variables conflict with each other. Used to detect when variables are mutually exclusive.
     Defaults to `fn _, _ -> false end`.
   - `:implies?` - A function `(variable, variable -> boolean())` that returns true if the first
-    variable implies the value of the second variable. Defaults to `fn _, _ -> false end`.
+    variable implies the second. Defaults to `fn _, _ -> false end`.
 
   ## Examples
 
@@ -183,7 +183,7 @@ defmodule Crux do
     variables conflict with each other. Used to filter out impossible scenarios.
     Defaults to `fn _, _ -> false end`.
   - `:implies?` - A function `(variable, variable -> boolean())` that returns true if the first
-    variable implies the value of the second variable. Used to minimize scenarios.
+    variable implies the second. Used to minimize scenarios.
     Defaults to `fn _, _ -> false end`.
 
   ## Examples
@@ -228,7 +228,8 @@ defmodule Crux do
   the provided conflict and implication callbacks. Variables are processed in
   sorted order.
 
-  Returns `{:ok, filtered_assignments}` if all assignments are valid, or
+  Returns `{:ok, filtered_assignments}` without true variables implied by
+  another true variable, or
   `{:error, :unsatisfiable}` if any conflicts are detected.
 
   ## Parameters
@@ -256,20 +257,35 @@ defmodule Crux do
         when variable: term()
   def validate_assignments(assignments, opts \\ []) do
     sorter = Keyword.get(opts, :sorter, &<=/2)
+    implies? = Keyword.get(opts, :implies?, fn _, _ -> false end)
 
     assignments
     |> Enum.sort_by(&elem(&1, 0), sorter)
     |> Enum.reduce_while({:ok, []}, fn {variable, value} = assignment, {:ok, acc} ->
       case validate_assignment(acc, assignment, opts) do
-        :implied -> {:cont, {:ok, acc}}
-        :conflict -> {:halt, {:error, :unsatisfiable}}
-        :ok -> {:cont, {:ok, [{variable, value} | acc]}}
+        :implied ->
+          {:cont, {:ok, acc}}
+
+        :conflict ->
+          {:halt, {:error, :unsatisfiable}}
+
+        :ok ->
+          acc = if value, do: drop_implied_by(acc, variable, implies?), else: acc
+          {:cont, {:ok, [{variable, value} | acc]}}
       end
     end)
     |> case do
       {:ok, filtered_assignments} -> {:ok, Enum.reverse(filtered_assignments)}
       error -> error
     end
+  end
+
+  # Drops kept true assignments implied by the newly kept true `variable`
+  defp drop_implied_by(kept_assignments, variable, implies?) do
+    Enum.reject(kept_assignments, fn
+      {kept_var, true} -> implies?.(variable, kept_var)
+      _ -> false
+    end)
   end
 
   @spec enumerate_dimacs_scenarios(Formula.t(variable), Formula.cnf(), negation_encoding(), [
@@ -532,8 +548,13 @@ defmodule Crux do
 
     # Extract variables that are set to true in existing assignments
     true_vars = for {var, true} <- existing_assignments, do: var
+    false_vars = for {var, false} <- existing_assignments, do: var
 
     cond do
+      # Reverse implication conflict: this variable implies an existing false variable
+      value and Enum.any?(false_vars, &implies?.(variable, &1)) ->
+        :conflict
+
       # Forward implication: Check if any existing true variable implies this variable
       value and Enum.any?(true_vars, &implies?.(&1, variable)) ->
         :implied
