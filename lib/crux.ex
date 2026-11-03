@@ -165,7 +165,7 @@ defmodule Crux do
     sorter = Keyword.get(opts, :sorter, &<=/2)
     variables = formula.bindings |> Map.values() |> Enum.sort(sorter)
     scenarios = satisfying_scenarios(formula, opts)
-    build_decision_tree(variables, [], scenarios, callbacks(opts))
+    build_decision_tree(variables, %{}, scenarios, callbacks(opts))
   end
 
   @doc """
@@ -452,9 +452,10 @@ defmodule Crux do
   # This approach avoids expensive SAT solving at each node by working with
   # known satisfying assignments and using early termination when a scenario
   # is already covered by the current path.
+  # The path is a map from each decided variable to its value.
   @spec build_decision_tree(
           [variable],
-          [{variable, boolean()}],
+          %{variable => boolean()},
           [%{variable => boolean()}],
           callbacks(variable)
         ) :: tree(variable)
@@ -473,11 +474,11 @@ defmodule Crux do
           case branch_shortcuts_with_validate(variable, path, callbacks) do
             :force_true ->
               right_scenarios = filter_and_strip(scenarios, variable, true)
-              build_decision_tree(rest, [{variable, true} | path], right_scenarios, callbacks)
+              build_decision_tree(rest, Map.put(path, variable, true), right_scenarios, callbacks)
 
             :force_false ->
               left_scenarios = filter_and_strip(scenarios, variable, false)
-              build_decision_tree(rest, [{variable, false} | path], left_scenarios, callbacks)
+              build_decision_tree(rest, Map.put(path, variable, false), left_scenarios, callbacks)
 
             :both ->
               left_scenarios = filter_and_strip(scenarios, variable, false)
@@ -486,7 +487,7 @@ defmodule Crux do
               left =
                 build_decision_tree(
                   rest,
-                  [{variable, false} | path],
+                  Map.put(path, variable, false),
                   left_scenarios,
                   callbacks
                 )
@@ -494,7 +495,7 @@ defmodule Crux do
               right =
                 build_decision_tree(
                   rest,
-                  [{variable, true} | path],
+                  Map.put(path, variable, true),
                   right_scenarios,
                   callbacks
                 )
@@ -512,7 +513,7 @@ defmodule Crux do
   # Uses conflict and implication analysis to skip impossible branches early.
   @spec branch_shortcuts_with_validate(
           variable,
-          [{variable, boolean()}],
+          %{variable => boolean()},
           callbacks(variable)
         ) :: :force_true | :force_false | :both | :unsat
         when variable: term()
@@ -548,11 +549,10 @@ defmodule Crux do
 
   # Returns true if the current path covers all variable assignments in the scenario.
   # Used for early termination when a satisfying assignment is already guaranteed.
-  @spec covered_by_path?(%{variable => boolean()}, [{variable, boolean()}]) :: boolean()
+  @spec covered_by_path?(%{variable => boolean()}, %{variable => boolean()}) :: boolean()
         when variable: term()
   defp covered_by_path?(scenario, path) do
-    path_map = Map.new(path)
-    Enum.all?(scenario, fn {variable, value} -> Map.get(path_map, variable) == value end)
+    Enum.all?(scenario, fn {variable, value} -> Map.get(path, variable) == value end)
   end
 
   @spec callbacks(opts(variable)) :: callbacks(variable) when variable: term()
