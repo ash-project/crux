@@ -28,6 +28,9 @@ cond do
       @moduledoc moduledoc
 
       @doc false
+      # SAT testing only: `SAT_SOLVER` names any module implementing `solve/1`, set by
+      # whoever runs the tests, so creating its atom is the documented contract.
+      # sobelow_skip ["DOS.ModuleConcat"]
       def solve_expression(cnf) do
         env_solver = Module.concat([System.get_env("SAT_SOLVER") || "Picosat"])
         solver = Process.get(__MODULE__, env_solver)
@@ -52,6 +55,8 @@ cond do
       @moduledoc moduledoc
 
       @doc false
+      # Same `SAT_SOLVER` contract as the `:crux` `:sat_testing` branch above.
+      # sobelow_skip ["DOS.ModuleConcat"]
       def solve_expression(cnf) do
         Module.concat([System.get_env("SAT_SOLVER") || "Picosat"]).solve(cnf)
       end
