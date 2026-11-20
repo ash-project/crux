@@ -14,10 +14,7 @@ defmodule Crux do
   #{readme_content}
   """
 
-  alias Crux.Expression
   alias Crux.Formula
-
-  require Expression
 
   @external_resource readme_path
 
