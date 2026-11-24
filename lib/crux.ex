@@ -199,8 +199,7 @@ defmodule Crux do
   def satisfying_scenarios(formula, opts \\ [])
 
   def satisfying_scenarios(%Formula{cnf: [], bindings: bindings}, _opts)
-      when map_size(bindings) == 0,
-      do: [%{}]
+      when map_size(bindings) == 0, do: [%{}]
 
   def satisfying_scenarios(%Formula{cnf: [[1], [-1]], bindings: %{1 => false}}, _opts), do: []
 
